@@ -3,6 +3,7 @@
 import asyncio
 import shutil
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -119,6 +120,8 @@ async def test_browse(admin_client: AsyncClient, inbox: Path, tmp_path: Path) ->
 
     band = inbox / "New Band"
     albums = (await admin_client.get("/api/manage/browse", params={"path": str(band)})).json()
+    created = datetime.fromisoformat(albums["entries"][0].pop("created"))
+    assert abs(created - datetime.now(UTC)) < timedelta(hours=1)  # just made
     assert albums["entries"][0] == {
         "name": "First Album",
         "path": str(band / "First Album"),
@@ -130,6 +133,60 @@ async def test_browse(admin_client: AsyncClient, inbox: Path, tmp_path: Path) ->
     for outside in (tmp_path, inbox / ".." / "music"):
         response = await admin_client.get("/api/manage/browse", params={"path": str(outside)})
         assert response.status_code == 403, outside
+
+
+async def test_album_folders_already_in_the_library(
+    admin_client: AsyncClient, inbox: Path, library: Path, db: Database
+) -> None:
+    album_tracks(library, "Delain", "Dark Waters", 2)
+    album_tracks(library, "Dethklok", "Dethalbum IV", 2)
+    await run_scan(db)
+    # Tagged, in a folder named its own way; one more track than the library has.
+    for n in (1, 2, 3):
+        make_track(
+            inbox / "Delain - Dark Waters (2023)" / f"0{n}",
+            title=f"Track {n}",
+            artist="Delain",
+            albumartist="Delain",
+            album="Dark Waters (Deluxe Edition)",
+        )
+    # No album tags: the folder names tell.
+    for n in (1, 2):
+        make_track(inbox / "Dethklok (FLAC)" / "2023 - Dethalbum IV" / f"0{n}", title=f"Track {n}")
+    # Tagged with an album the library does not have: its name does not matter.
+    make_track(inbox / "Delain - Dark Waters live" / "01", artist="Delain", album="Live")
+    (inbox / "Scans").mkdir()
+    (inbox / "Scans" / "front.jpg").write_bytes(COVER_JPG.read_bytes())
+
+    found = (await admin_client.get("/api/manage/browse/in-library")).json()
+    assert [
+        (f["path"], f["album"], f["tracks"], f["libraryTracks"], f["reason"]) for f in found
+    ] == [(str(inbox / "Delain - Dark Waters (2023)"), "Dark Waters", 3, 2, "tags")]
+    band = inbox / "Dethklok (FLAC)"
+    found = (
+        await admin_client.get("/api/manage/browse/in-library", params={"path": str(band)})
+    ).json()
+    assert [(f["album"], f["artist"], f["libraryTracks"], f["reason"]) for f in found] == [
+        ("Dethalbum IV", "Dethklok", 2, "name")
+    ]
+    outside = await admin_client.get("/api/manage/browse/in-library", params={"path": str(library)})
+    assert outside.status_code == 403
+
+
+async def test_folders_imported_by_sound_barrier_are_in_the_library(
+    app: FastAPI, admin_client: AsyncClient, inbox: Path
+) -> None:
+    source = inbox / "New Band" / "First Album"
+    (task,) = await run_import(app, admin_client, source)
+    assert (await decide(app, admin_client, task["id"], action="as_is"))["status"] == "imported"
+    await wait_scans(app)
+    # The source's tags changed since (another album name): the import history tells.
+    for track in sorted(source.glob("*.mp3")):
+        make_track(track.with_suffix(""), title=track.stem, artist="New Band", album="Renamed")
+    found = (
+        await admin_client.get("/api/manage/browse/in-library", params={"path": str(source.parent)})
+    ).json()
+    assert [(f["album"], f["reason"]) for f in found] == [("First Album", "imported")]
 
 
 # --- imports ----------------------------------------------------------------------------

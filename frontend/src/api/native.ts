@@ -116,6 +116,7 @@ export interface FolderEntry {
   isDir: boolean;
   audioFiles: number;
   size: number;
+  created: string; // ISO; the last modification where the server's OS keeps no creation time
 }
 
 export interface BrowseResponse {
@@ -123,6 +124,17 @@ export interface BrowseResponse {
   path: string;
   parent: string | null; // null at the import root
   entries: FolderEntry[];
+}
+
+/** An album folder of the import browser that is already in the library. */
+export interface InLibraryFolder {
+  path: string;
+  albumId: string;
+  album: string;
+  artist: string;
+  tracks: number; // audio files in the folder
+  libraryTracks: number | null; // of them in the library; null: unknown (no title tags)
+  reason: "tags" | "name" | "imported";
 }
 
 export interface ImportItem {
@@ -477,6 +489,9 @@ export const api = {
   setManageSettings: (settings: ManageSettingsUpdate) => request<ManageSettings>("PUT", "/manage/settings", settings),
   browse: (path?: string) =>
     request<BrowseResponse>("GET", `/manage/browse${path ? `?path=${encodeURIComponent(path)}` : ""}`),
+  /** The album folders of a listed folder already in the library (tags are read: slower). */
+  browseInLibrary: (path?: string) =>
+    request<InLibraryFolder[]>("GET", `/manage/browse/in-library${path ? `?path=${encodeURIComponent(path)}` : ""}`),
   startImport: (paths: string[]) => request<ImportJob>("POST", "/manage/imports", { paths }),
   listImports: () => request<ImportJob[]>("GET", "/manage/imports"),
   getLibraryStatus: () => request<LibraryStatus>("GET", "/manage/library-status"),

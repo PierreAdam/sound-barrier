@@ -2633,6 +2633,38 @@ select.field__input {
     white-space: nowrap;
   }
 
+  // An album folder the library already has (an information: importing again is possible).
+  &__in-library {
+    margin-left: auto;
+  }
+
+  // Right of the row, after the "In library" badge when there is one.
+  &__date {
+    margin-left: auto;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__in-library + &__date {
+    margin-left: 0;
+  }
+
+  &__sort {
+    display: inline-flex;
+    gap: @space-2;
+    margin-left: auto;
+    font-size: @font-size-sm;
+
+    .link-button {
+      color: @color-text-muted;
+    }
+
+    .link-button.browser__sort--active {
+      color: @color-accent;
+      font-weight: 600;
+    }
+  }
+
   &__entry {
     display: flex;
     align-items: center;

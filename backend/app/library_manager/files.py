@@ -3,6 +3,7 @@
 import os
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.library_manager.tagger import ItemInfo
@@ -68,6 +69,15 @@ class FolderEntry:
     is_dir: bool
     audio_files: int  # direct audio files (folders) / 1 or 0 (files)
     size: int  # bytes (files only)
+    created: datetime  # see created_at
+
+
+def created_at(stat: os.stat_result) -> datetime:
+    """When a file or folder was created: its creation time where the OS keeps one
+    (Windows, macOS), else its last modification (Linux: for a downloaded album folder,
+    when its files arrived)."""
+    birth: float | None = getattr(stat, "st_birthtime", None)
+    return datetime.fromtimestamp(birth if birth is not None else stat.st_mtime, UTC)
 
 
 def list_folder(folder: Path) -> list[FolderEntry]:
@@ -81,12 +91,19 @@ def list_folder(folder: Path) -> list[FolderEntry]:
                 count = sum(1 for child in os.scandir(entry.path) if is_audio(Path(child.name)))
             except OSError:
                 count = 0
-            entries.append(FolderEntry(entry.name, entry.path, True, count, 0))
+            created = created_at(entry.stat())
+            entries.append(FolderEntry(entry.name, entry.path, True, count, 0, created))
         elif entry.is_file():
             path = Path(entry.path)
+            stat = entry.stat()
             entries.append(
                 FolderEntry(
-                    entry.name, entry.path, False, int(is_audio(path)), entry.stat().st_size
+                    entry.name,
+                    entry.path,
+                    False,
+                    int(is_audio(path)),
+                    stat.st_size,
+                    created_at(stat),
                 )
             )
     return entries

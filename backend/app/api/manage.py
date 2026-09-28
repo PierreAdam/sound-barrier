@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import Field
 
 from app.api.deps import AdminCaller, ApiModel, DbSession
-from app.library_manager import deletion, files, imports, transcode
+from app.library_manager import deletion, files, imports, in_library, transcode
 from app.library_manager import status as library_state
 from app.library_manager.imports import ImportManager, ImportRequestError
 from app.models import ImportJob, ImportTask, MusicFolder
@@ -113,6 +113,7 @@ class Entry(ApiModel):
     is_dir: bool
     audio_files: int
     size: int
+    created: datetime  # creation time, or last modification where the OS keeps none
 
 
 class BrowseResponse(ApiModel):
@@ -140,6 +141,35 @@ async def browse(_: AdminCaller, session: DbSession, path: str | None = None) ->
         parent=None if at_root else str(target.parent),
         entries=[Entry(**vars(e)) for e in listing],
     )
+
+
+class InLibraryOut(ApiModel):
+    path: str
+    album_id: str
+    album: str
+    artist: str
+    tracks: int  # audio files in the folder
+    library_tracks: int | None  # of them in the library; None: unknown (no title tags)
+    reason: str  # "tags", "name" or "imported"
+
+
+@router.get("/browse/in-library")
+async def browse_in_library(
+    _: AdminCaller, session: DbSession, path: str | None = None
+) -> list[InLibraryOut]:
+    """The album folders (folders with audio files) of a listed folder that are already
+    in the library. Separate from /browse, which stays fast: tags are read here."""
+    root = await _import_root(session)
+    try:
+        target = await asyncio.to_thread(files.ensure_within, path or root, [root])
+        listing = await asyncio.to_thread(files.list_folder, target)
+    except files.OutsideAllowedFolderError:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Outside the import root folder") from None
+    except OSError as error:
+        raise _bad_request(f"Cannot read {path or root}: {error.strerror or error}") from None
+    folders = [Path(e.path) for e in listing if e.is_dir and e.audio_files]
+    found = await in_library.album_folders_in_library(session, folders)
+    return [InLibraryOut(**vars(f)) for f in found]
 
 
 # --- imports --------------------------------------------------------------------------

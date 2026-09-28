@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { api, type BrowseResponse, type ImportJob, type ManageSettings } from "../../api/native";
+import {
+  api,
+  type BrowseResponse,
+  type FolderEntry,
+  type ImportJob,
+  type InLibraryFolder,
+  type ManageSettings,
+} from "../../api/native";
 import { FolderIcon, MusicNoteIcon } from "../../components/Icons";
 import { formatSize, plural } from "../../format";
 import { settingsUrl } from "../settings/tabs";
@@ -45,6 +52,17 @@ export function ImportTab({ settings, imports, onReview }: Props) {
   );
 }
 
+type SortOrder = "newest" | "name";
+
+/** Newest first (the most recent downloads on top), or by name as the server lists them. */
+function sorted(entries: FolderEntry[], order: SortOrder): FolderEntry[] {
+  if (order === "name") return entries;
+  return [...entries].sort((a, b) => b.created.localeCompare(a.created));
+}
+
+const formatCreated = (value: string) =>
+  new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+
 function relative(path: string, root: string): string {
   return path.length > root.length ? path.slice(root.length).replace(/^[\\/]/, "") : "";
 }
@@ -55,6 +73,9 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // Album folders of the listing already in the library (an information only).
+  const [inLibrary, setInLibrary] = useState<Map<string, InLibraryFolder>>(() => new Map());
+  const [order, setOrder] = useState<SortOrder>("newest");
 
   const open = useCallback(async (path?: string) => {
     setError(null);
@@ -69,6 +90,23 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
   useEffect(() => {
     void open();
   }, [open, settings.root]);
+
+  // Asked after the listing: reading the tags takes longer than listing the folder.
+  const listed = listing?.path;
+  useEffect(() => {
+    setInLibrary(new Map());
+    if (!listed) return;
+    let cancelled = false;
+    api
+      .browseInLibrary(listed)
+      .then((found) => {
+        if (!cancelled) setInLibrary(new Map(found.map((f) => [f.path, f])));
+      })
+      .catch((e: unknown) => console.error("Cannot tell which folders are in the library", e));
+    return () => {
+      cancelled = true;
+    };
+  }, [listed]);
 
   function toggle(path: string) {
     setSelected((previous) => {
@@ -91,7 +129,8 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
     }
   }
 
-  const folders = listing?.entries.filter((e) => e.isDir) ?? [];
+  const folders = sorted(listing?.entries.filter((e) => e.isDir) ?? [], order);
+  const fileEntries = sorted(listing?.entries.filter((e) => !e.isDir) ?? [], order);
   const audioHere = listing?.entries.filter((e) => !e.isDir && e.audioFiles).length ?? 0;
   const where = listing ? relative(listing.path, listing.root) : "";
 
@@ -126,6 +165,20 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
               {where}
             </span>
           )}
+          <span className="browser__sort" role="group" aria-label="Sort">
+            <span className="text-muted">Sort:</span>
+            {(["newest", "name"] as const).map((value) => (
+              <button
+                key={value}
+                className={`link-button${order === value ? " browser__sort--active" : ""}`}
+                type="button"
+                aria-pressed={order === value}
+                onClick={() => setOrder(value)}
+              >
+                {value === "newest" ? "Newest first" : "Name"}
+              </button>
+            ))}
+          </span>
         </div>
       )}
       {error && <p className="text-error">{error}</p>}
@@ -145,17 +198,18 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
                 <span>{entry.name}</span>
               </button>
               {entry.audioFiles > 0 && <span className="text-muted">{plural(entry.audioFiles, "audio file")}</span>}
+              <InLibraryBadge found={inLibrary.get(entry.path)} />
+              <Created value={entry.created} />
             </li>
           ))}
-          {listing.entries
-            .filter((e) => !e.isDir)
-            .map((entry) => (
-              <li key={entry.path} className="browser__entry browser__entry--file">
-                <MusicNoteIcon />
-                <span>{entry.name}</span>
-                <span className="text-muted">{formatSize(entry.size)}</span>
-              </li>
-            ))}
+          {fileEntries.map((entry) => (
+            <li key={entry.path} className="browser__entry browser__entry--file">
+              <MusicNoteIcon />
+              <span>{entry.name}</span>
+              <span className="text-muted">{formatSize(entry.size)}</span>
+              <Created value={entry.created} />
+            </li>
+          ))}
           {listing.entries.length === 0 && <li className="browser__entry text-muted">Empty folder.</li>}
         </ul>
       )}
@@ -182,14 +236,41 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
   );
 }
 
+function Created({ value }: { value: string }) {
+  return (
+    <time className="browser__date text-muted" dateTime={value} title="Created (or last changed)">
+      {formatCreated(value)}
+    </time>
+  );
+}
+
+/** "In library" on an album folder the library already has; nothing otherwise. */
+function InLibraryBadge({ found }: { found: InLibraryFolder | undefined }) {
+  if (!found) return null;
+  const tracks =
+    found.libraryTracks === null
+      ? ""
+      : `: ${found.libraryTracks} of ${plural(found.tracks, "track")} in the library`;
+  const how = { tags: "", name: " (recognized by the folder name)", imported: " (imported here before)" }[found.reason];
+  return (
+    <span className="badge browser__in-library" title={`“${found.album}” by ${found.artist}${tracks}${how}`}>
+      In library
+    </span>
+  );
+}
+
+const RECENT_IMPORTS = 10;
+
+/** The most recent imports (the list comes newest first). */
 function RecentImports({ jobs, error, onReview }: { jobs: ImportJob[]; error: string | null; onReview(): void }) {
+  const recent = jobs.slice(0, RECENT_IMPORTS);
   return (
     <section className="settings-section settings-section--wide">
       <h2 className="settings-section__title">Recent imports</h2>
       {error && <p className="text-error">{error}</p>}
-      {jobs.length === 0 && <p className="text-muted">No import yet.</p>}
+      {recent.length === 0 && <p className="text-muted">No import yet.</p>}
       <ul className="job-list">
-        {jobs.map((job) => {
+        {recent.map((job) => {
           const counts = new Map<string, number>();
           for (const task of job.tasks) counts.set(task.status, (counts.get(task.status) ?? 0) + 1);
           const converted = job.tasks.reduce((sum, t) => sum + (t.result?.converted ?? 0), 0);
