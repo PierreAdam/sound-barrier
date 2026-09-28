@@ -24,7 +24,7 @@ from app.core.text import normalize, title_key
 from app.external import ExternalServiceError
 from app.external.lastfm import LastFm
 from app.external.pictures import PROVIDERS
-from app.models import AppUser, Artist, ArtistInfo
+from app.models import Album, AppUser, Artist, ArtistInfo
 from app.services import browsing, server_settings
 from app.services.browsing import SongEntry
 
@@ -141,10 +141,13 @@ async def _refresh_picture(
     pictures_dir: Path,
     now: datetime,
     keys: dict[str, str],
+    album_titles: list[str],
 ) -> None:
     provider = PROVIDERS[source]
     try:
-        picture = await provider.find(http, artist.name, artist.mbz_artist_id, keys)
+        picture = await provider.find(
+            http, artist.name, artist.mbz_artist_id, keys, album_titles=album_titles
+        )
     except ExternalServiceError as error:
         row.picture_error = str(error)
         row.picture_fetched_at = now
@@ -243,7 +246,15 @@ async def get(
     picture_stale = stale(row.picture_fetched_at, row.picture_error is not None, now)
     if source and (refresh or picture_stale or row.picture_source not in (None, source)):
         keys = api_keys(settings, cipher)
-        await _refresh_picture(row, artist, http, source, pictures_dir, now, keys)
+        # Its albums tell same-name artists apart at the source.
+        album_titles = list(
+            await session.scalars(
+                select(Album.name).where(
+                    Album.artist_id == artist_id, Album.missing_since.is_(None)
+                )
+            )
+        )
+        await _refresh_picture(row, artist, http, source, pictures_dir, now, keys, album_titles)
     await session.flush()
 
     details = ArtistDetails(lastfm_configured=key is not None)

@@ -27,6 +27,7 @@ class LibraryStatus:
     albums: int
     songs: int
     has_tagger_database: bool
+    size_bytes: int = 0  # the songs' files on the disk
     tagger_albums: int = 0
     tagger_songs: int = 0  # library songs the tagger knows
     tagger_missing: int = 0  # tagger entries whose file is gone
@@ -39,19 +40,20 @@ async def library_status(
     root = Path(folder.path)
     rows = (
         await session.execute(
-            select(Song.path, Album.id, Album.name, Album.display_artist)
+            select(Song.path, Album.id, Album.name, Album.display_artist, Song.size)
             .join(Album, Album.id == Song.album_id)
             .where(Song.music_folder_id == folder.id, Song.missing_since.is_(None))
         )
     ).all()
-    albums = {album_id for _, album_id, _, _ in rows}
+    albums = {album_id for _, album_id, _, _, _ in rows}
+    size = sum(song_size for *_, song_size in rows)
     known = await imports.call_tagger(imports.tagger.library, root)
     if known is None:
-        return LibraryStatus(len(albums), len(rows), has_tagger_database=False)
+        return LibraryStatus(len(albums), len(rows), has_tagger_database=False, size_bytes=size)
 
     folders: dict[str, UnknownFolder] = {}
     known_songs = 0
-    for path, _, album, artist in rows:
+    for path, _, album, artist, _ in rows:
         directory = path.rpartition("/")[0]
         entry = folders.get(directory)
         if entry is None:
@@ -69,6 +71,7 @@ async def library_status(
         len(albums),
         len(rows),
         has_tagger_database=True,
+        size_bytes=size,
         tagger_albums=known.albums,
         tagger_songs=known_songs,
         tagger_missing=len(known.missing),

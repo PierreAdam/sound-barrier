@@ -69,9 +69,13 @@ export const RefreshIcon = () => (
   </Icon>
 );
 
+/** Two beamed notes (the placeholder of missing covers). Separate shapes: overlapping
+ * sub-paths of one path could cancel each other out. */
 export const MusicNoteIcon = () => (
   <Icon>
-    <path d="M9 17.5A2.5 2.5 0 1 1 6.5 15H9V5l10-2v12.5a2.5 2.5 0 1 1-2.5-2.5H19V6.4l-8 1.6v9.5z" />
+    <path d="M7.5 17.5V6.2L19 3.5v12h-1.5V6.05L9 8.05v9.45z" />
+    <circle cx="6.5" cy="17.5" r="2.5" />
+    <circle cx="16.5" cy="15.5" r="2.5" />
   </Icon>
 );
 

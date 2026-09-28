@@ -1,7 +1,8 @@
 // Sound-Barrier logo ("Mach play"): a play button inside its shock cone.
 // Inline (not <img>) so hovering can play the flight animation once; the static
 // logo comes back when the last animated element finishes.
-// Standalone copies for other uses: public/logo.svg and public/logo-flight.svg.
+// No background tile: it sits on the page's own background. Standalone copies for other
+// uses (with a dark tile, e.g. as an app icon): public/logo.svg and public/logo-flight.svg.
 import { useId, useState } from "react";
 
 const CONE = "15,11 51,32 15,53";
@@ -22,7 +23,6 @@ export function BrandLogo({ className }: { className?: string }) {
           <rect width="64" height="64" rx="14" />
         </clipPath>
       </defs>
-      <rect className="brand-logo__tile" width="64" height="64" rx="14" />
       <g clipPath={`url(#${clipId})`}>
         <path className="brand-logo__air" d="M8 27 q1.5 -2 3 0 t3 0 t3 0" />
         <path className="brand-logo__air" d="M6 32 q1.5 -2 3 0 t3 0 t3 0 t3 0" />

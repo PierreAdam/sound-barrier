@@ -19,9 +19,14 @@ export function plural(count: number, singular: string, pluralForm = `${singular
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
 
-/** 10_485_760 -> "10.5 MB". */
+/**
+ * A size in the most readable unit, in decimal units like disk makers:
+ * 10_485_760 -> "10.5 MB", 245_000_000_000 -> "245.0 GB", 1_830_000_000_000 -> "1.83 TB".
+ */
 export function formatSize(bytes: number | undefined): string {
   if (bytes === undefined) return "";
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  if (bytes < 1e6) return `${Math.max(1, Math.round(bytes / 1e3))} KB`;
+  if (bytes < 1e9) return `${(bytes / 1e6).toFixed(1)} MB`;
+  if (bytes < 1e12) return `${(bytes / 1e9).toFixed(1)} GB`;
+  return `${(bytes / 1e12).toFixed(2)} TB`;
 }

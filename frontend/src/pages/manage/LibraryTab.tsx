@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api, type LibraryStatus } from "../../api/native";
 import { RefreshIcon } from "../../components/Icons";
-import { plural } from "../../format";
+import { formatSize, plural } from "../../format";
 import type { Imports } from "./useImports";
 
 // MusicBrainz answers about once a second and an album takes a few requests.
@@ -166,7 +166,8 @@ export function LibraryTab({ imports, onReview }: { imports: Imports; onReview()
           </dd>
           <dt>Library</dt>
           <dd>
-            {plural(status.albums, "album")} · {plural(status.songs, "song")}
+            {plural(status.albums, "album")} · {plural(status.songs, "song")} ·{" "}
+            <span title="Space taken by the music files on the disk">{formatSize(status.sizeBytes)}</span>
           </dd>
           <dt>Tagging</dt>
           <dd>{status.tagger}</dd>

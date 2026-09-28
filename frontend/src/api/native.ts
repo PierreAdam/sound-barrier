@@ -222,6 +222,7 @@ export interface LibraryStatus {
   libraryPath: string;
   albums: number;
   songs: number;
+  sizeBytes: number; // the songs' files on the disk
   tagger: string;
   hasTaggerDatabase: boolean;
   taggerAlbums: number;

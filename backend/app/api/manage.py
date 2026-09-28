@@ -301,6 +301,7 @@ class LibraryStatusOut(ApiModel):
     library_path: str
     albums: int
     songs: int
+    size_bytes: int  # the songs' files on the disk
     tagger: str
     has_tagger_database: bool  # False: the tagger keeps no database (no beets)
     tagger_albums: int
@@ -325,6 +326,7 @@ async def library_status(request: Request, _: AdminCaller, session: DbSession) -
         library_path=folder.path,
         albums=result.albums,
         songs=result.songs,
+        size_bytes=result.size_bytes,
         tagger=_imports(request).tagger.name,
         has_tagger_database=result.has_tagger_database,
         tagger_albums=result.tagger_albums,

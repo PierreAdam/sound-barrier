@@ -5,18 +5,20 @@ another (e.g. fanart.tv, which needs an API key and MusicBrainz ids) means one c
 one entry in PROVIDERS and, if it needs one, an API key in the external services settings.
 """
 
+import asyncio
 import re
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
-from app.core.text import normalize
+from app.core.text import normalize, title_key
 from app.external import ExternalServiceError, fanart
 
 MAX_PICTURE_BYTES = 8 * 1024 * 1024
+NAMESAKES_CHECKED = 5  # same-name artists whose albums are compared with the library
 
 
 @dataclass
@@ -33,9 +35,15 @@ class PictureProvider(ABC):
 
     @abstractmethod
     async def find(
-        self, http: httpx.AsyncClient, name: str, mbid: str | None, keys: Mapping[str, str]
+        self,
+        http: httpx.AsyncClient,
+        name: str,
+        mbid: str | None,
+        keys: Mapping[str, str],
+        album_titles: Sequence[str] = (),
     ) -> Picture | None:
-        """The artist's picture, None if the source has none for this artist."""
+        """The artist's picture, None if the source has none for this artist.
+        `album_titles`: the artist's albums in the library, to tell namesakes apart."""
 
 
 async def _download(http: httpx.AsyncClient, url: str) -> tuple[bytes, str] | None:
@@ -78,18 +86,57 @@ class Deezer(PictureProvider):
     label = "Deezer"
     SEARCH_URL = "https://api.deezer.com/search/artist"
 
+    ALBUMS_URL = "https://api.deezer.com/artist/{id}/albums"
+
+    async def _album_titles(self, http: httpx.AsyncClient, artist_id: object) -> set[str]:
+        """The artist's album titles on Deezer (matching form); empty if unreachable."""
+        try:
+            response = await http.get(self.ALBUMS_URL.format(id=artist_id), params={"limit": "100"})
+            albums: list[dict[str, Any]] = response.json().get("data") or []
+        except (httpx.HTTPError, ValueError):
+            return set()
+        return {title_key(str(album.get("title") or "")) for album in albums}
+
+    async def _choose(
+        self,
+        http: httpx.AsyncClient,
+        name: str,
+        results: list[dict[str, Any]],
+        album_titles: Sequence[str],
+    ) -> dict[str, Any] | None:
+        """The artist among the search results. Several with exactly this name (e.g. many
+        "Dope"): the one sharing the most albums with the library, else the most followed."""
+        wanted = _words(name)
+        namesakes = [r for r in results if _words(str(r.get("name", ""))) == wanted]
+        if not namesakes:
+            index = best_match(name, [str(r.get("name", "")) for r in results])
+            return results[index] if index is not None else None
+        namesakes.sort(key=lambda r: -int(r.get("nb_fan") or 0))  # stable: Deezer's order next
+        library = {title_key(title) for title in album_titles} - {""}
+        if len(namesakes) == 1 or not library:
+            return namesakes[0]
+        checked = namesakes[:NAMESAKES_CHECKED]
+        titles = await asyncio.gather(*(self._album_titles(http, r.get("id")) for r in checked))
+        shared = [len(library & found) for found in titles]
+        best = max(range(len(checked)), key=lambda i: shared[i])  # first (most fans) on ties
+        return checked[best]
+
     async def find(
-        self, http: httpx.AsyncClient, name: str, mbid: str | None, keys: Mapping[str, str]
+        self,
+        http: httpx.AsyncClient,
+        name: str,
+        mbid: str | None,
+        keys: Mapping[str, str],
+        album_titles: Sequence[str] = (),
     ) -> Picture | None:
         try:
             response = await http.get(self.SEARCH_URL, params={"q": name, "limit": "10"})
             results: list[dict[str, Any]] = response.json().get("data") or []
         except (httpx.HTTPError, ValueError) as error:
             raise ExternalServiceError(f"Deezer is not reachable: {error}") from error
-        index = best_match(name, [str(r.get("name", "")) for r in results])
-        if index is None:
+        match = await self._choose(http, name, results, album_titles)
+        if match is None:
             return None
-        match = results[index]
         url = match.get("picture_xl") or match.get("picture_big")
         # Artists without a picture get a generic silhouette: ".../images/artist//...".
         if not isinstance(url, str) or "/artist//" in url:
@@ -109,7 +156,12 @@ class FanartTv(PictureProvider):
     needs_key = fanart.KEY_NAME
 
     async def find(
-        self, http: httpx.AsyncClient, name: str, mbid: str | None, keys: Mapping[str, str]
+        self,
+        http: httpx.AsyncClient,
+        name: str,
+        mbid: str | None,
+        keys: Mapping[str, str],
+        album_titles: Sequence[str] = (),
     ) -> Picture | None:
         key = keys.get(fanart.KEY_NAME)
         if not mbid or not key:

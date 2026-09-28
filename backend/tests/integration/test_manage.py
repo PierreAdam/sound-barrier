@@ -469,6 +469,8 @@ async def test_library_status_and_adopt(
 
     status = (await admin_client.get("/api/manage/library-status")).json()
     assert (status["albums"], status["songs"], status["hasTaggerDatabase"]) == (2, 3, True)
+    files = list(library.rglob("*.mp3"))
+    assert status["sizeBytes"] == sum(f.stat().st_size for f in files) > 0
     assert (status["taggerSongs"], status["taggerMissing"]) == (1, 1)
     assert status["unknownFolders"] == [
         {
