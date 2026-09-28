@@ -78,12 +78,14 @@ EXTERNAL_SERVICES_KEY = "external_services"
 
 
 class ExternalServices(BaseModel):
-    """Artist information (Last.fm) and pictures. API keys are stored encrypted with the
-    server's secret key (`*_key_enc`, Fernet tokens), never sent back to the web UI."""
+    """Artist information (Last.fm), pictures and discographies (MusicBrainz). API keys
+    are stored encrypted with the server's secret key (`*_key_enc`, Fernet tokens), never
+    sent back to the web UI."""
 
     lastfm_key_enc: str | None = None
     fanart_key_enc: str | None = None
     picture_source: str = "deezer"  # "none" or an app.external.pictures provider id
+    musicbrainz: bool = True  # artist discographies ("Missing albums")
 
 
 async def get_external_services(session: AsyncSession) -> ExternalServices:

@@ -191,3 +191,13 @@ export const LibraryIcon = () => (
     <path {...stroke} d="M4 4v16M9 4v16M14 5l5 15M3 20h18" />
   </Icon>
 );
+
+/** A record: an artist's discography. */
+export const DiscIcon = () => (
+  <Icon>
+    <path
+      fillRule="evenodd"
+      d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm0 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"
+    />
+  </Icon>
+);

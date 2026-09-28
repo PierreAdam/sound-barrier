@@ -41,6 +41,7 @@ class ExternalSettingsOut(ApiModel):
     fanart_key_set: bool
     picture_source: str  # "none" or a provider id
     picture_sources: list[PictureSource]
+    musicbrainz: bool  # discographies ("Missing albums" on artist pages)
 
 
 class ExternalSettingsIn(ApiModel):
@@ -48,6 +49,7 @@ class ExternalSettingsIn(ApiModel):
     lastfm_key: str | None = None
     fanart_key: str | None = None  # same: None keeps it, "" removes it
     picture_source: str = "deezer"
+    musicbrainz: bool | None = None  # None keeps the current choice
 
 
 def _settings_out(settings: server_settings.ExternalServices) -> ExternalSettingsOut:
@@ -55,6 +57,7 @@ def _settings_out(settings: server_settings.ExternalServices) -> ExternalSetting
         lastfm_key_set=settings.lastfm_key_enc is not None,
         fanart_key_set=settings.fanart_key_enc is not None,
         picture_source=settings.picture_source,
+        musicbrainz=settings.musicbrainz,
         picture_sources=[PictureSource(id="none", label="None")]
         + [
             PictureSource(id=p.id, label=p.label, needs_key=p.needs_key) for p in PROVIDERS.values()
@@ -112,6 +115,8 @@ async def set_external_settings(
             status.HTTP_400_BAD_REQUEST, f"{provider.label} needs its API key first"
         )
     settings.picture_source = body.picture_source
+    if body.musicbrainz is not None:
+        settings.musicbrainz = body.musicbrainz
     await server_settings.set_external_services(session, settings)
     await session.commit()
     return _settings_out(settings)

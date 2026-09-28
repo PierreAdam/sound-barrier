@@ -244,6 +244,8 @@ export interface DeleteResult {
 export interface UserPreferences {
   theme: Appearance;
   player: { crossfade: boolean; crossfadeSeconds: number };
+  /** Release group categories shown in "Missing albums" (e.g. "album", "album+live"). */
+  discography: { categories: string[] };
 }
 
 // --- web play queue ------------------------------------------------------------
@@ -272,6 +274,7 @@ export interface ExternalSettings {
   fanartKeySet: boolean;
   pictureSource: string; // "none" or a provider id
   pictureSources: { id: string; label: string; needsKey: string | null }[];
+  musicbrainz: boolean; // discographies ("Missing albums" on artist pages)
 }
 
 /** A key: undefined keeps it, "" removes it, else the new key (checked by the server). */
@@ -279,6 +282,7 @@ export interface ExternalSettingsUpdate {
   lastfmKey?: string;
   fanartKey?: string;
   pictureSource?: string;
+  musicbrainz?: boolean;
 }
 
 export interface ArtistInfo {
@@ -290,6 +294,86 @@ export interface ArtistInfo {
   topSongs: Child[]; // songs of the library, most popular first
   picture: { source: string; pageUrl: string | null; coverArt: string } | null;
   error: string | null; // admins only
+}
+
+// --- discography (MusicBrainz) ------------------------------------------------
+
+export interface ReleaseGroup {
+  mbid: string;
+  title: string;
+  category: string; // "album", "album+live", "ep+demo"...
+  primaryType: string | null;
+  secondaryTypes: string[];
+  firstReleaseDate: string | null; // partial ISO date
+  upcoming: boolean;
+  owned: { albumId: string; name: string; coverArt: string | null } | null; // in the library
+}
+
+export interface Discography {
+  enabled: boolean; // MusicBrainz lookups allowed in Settings
+  artistMbid: string | null;
+  mbidSource: "manual" | "tags" | "search" | null; // null: not linked to MusicBrainz
+  fetchedAt: string | null;
+  error: string | null; // admins only
+  categories: { key: string; label: string; total: number; missing: number }[]; // display order
+  releaseGroups: ReleaseGroup[]; // by category, then date
+}
+
+export interface MusicBrainzArtist {
+  mbid: string;
+  name: string;
+  disambiguation: string | null;
+  country: string | null;
+  type: string | null;
+  begin: string | null;
+  end: string | null;
+  score: number;
+}
+
+// --- plugins (admins) -----------------------------------------------------------
+
+/** A settings field, described by the plugin (the form is built from these). */
+export interface PluginField {
+  key: string;
+  label: string;
+  type: "text" | "textarea" | "boolean" | "select" | "list";
+  help: string | null;
+  placeholder: string | null;
+  options: string[]; // select
+  visibleWhen: [string, string] | null; // shown when that sibling field has that value
+  // list
+  fields: PluginField[];
+  itemLabel: string | null; // sub-field naming a row
+  idKey: string | null; // sub-field identifying a row (given by the plugin)
+  iconAsset: string | null; // a row's icon ("{id}" replaced)
+  canTry: boolean;
+}
+
+export type PluginSettings = Record<string, unknown>;
+
+export interface PluginInfo {
+  id: string;
+  name: string;
+  description: string;
+  capabilities: string[]; // "links"
+  fields: PluginField[];
+  enabled: boolean;
+  settings: PluginSettings;
+}
+
+/** A way to find an album: a page to open, or a form the browser submits (POST). */
+export interface AlbumLink {
+  label: string;
+  url: string;
+  method: "GET" | "POST";
+  form: [string, string][];
+  iconUrl: string | null;
+}
+
+export interface PluginLinks {
+  plugin: string;
+  name: string;
+  links: AlbumLink[];
 }
 
 // --- tag editor (admins) -----------------------------------------------------
@@ -340,6 +424,29 @@ export const api = {
     request<ExternalSettings>("PUT", "/external/settings", settings),
   getArtistInfo: (artistId: string) => request<ArtistInfo>("GET", `/artists/${artistId}/info`),
   refreshArtistInfo: (artistId: string) => request<ArtistInfo>("POST", `/artists/${artistId}/info/refresh`),
+  getDiscography: (artistId: string) => request<Discography>("GET", `/artists/${artistId}/discography`),
+  refreshDiscography: (artistId: string) =>
+    request<Discography>("POST", `/artists/${artistId}/discography/refresh`),
+  /** A release group's cover (an <img> source; 404 when there is none). */
+  discographyCoverUrl: (artistId: string, mbid: string) => `/api/artists/${artistId}/discography/covers/${mbid}`,
+  searchMusicBrainzArtists: (artistId: string, query?: string) =>
+    request<MusicBrainzArtist[]>(
+      "GET",
+      `/artists/${artistId}/musicbrainz/candidates${query ? `?q=${encodeURIComponent(query)}` : ""}`,
+    ),
+  /** An id or a musicbrainz.org URL; null goes back to the tags / the search. */
+  linkMusicBrainz: (artistId: string, mbid: string | null) =>
+    request<Discography>("PUT", `/artists/${artistId}/musicbrainz`, { mbid }),
+
+  getPlugins: () => request<PluginInfo[]>("GET", "/plugins"),
+  savePlugin: (pluginId: string, enabled: boolean, settings: PluginSettings, refresh = false) =>
+    request<{ plugin: PluginInfo; warnings: string[] }>("PUT", `/plugins/${pluginId}`, { enabled, settings, refresh }),
+  /** The links of one row of a list field (saved or not), for a sample album. */
+  tryPlugin: (pluginId: string, settings: PluginSettings, field: string, item: number) =>
+    request<AlbumLink[]>("POST", `/plugins/${pluginId}/try`, { settings, field, item }),
+  pluginAssetUrl: (pluginId: string, name: string) => `/api/plugins/${pluginId}/assets/${name}`,
+  getReleaseGroupLinks: (artistId: string, mbid: string) =>
+    request<PluginLinks[]>("GET", `/artists/${artistId}/discography/${mbid}/links`),
 
   getAlbumTags: (albumId: string) => request<AlbumTags>("GET", `/albums/${albumId}/tags`),
   setAlbumTags: (albumId: string, tags: AlbumTags) =>

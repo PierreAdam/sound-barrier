@@ -1,3 +1,4 @@
+import re
 import unicodedata
 
 # Subsonic's default `ignoredArticles`.
@@ -28,3 +29,14 @@ def index_letter(sort_name: str) -> str:
     """First letter for artist indexes (`getArtists`, `getIndexes`); `#` for non-letters."""
     first = normalize(sort_name)[:1].upper()
     return first if first.isalpha() else "#"
+
+
+_BRACKETS = re.compile(r"[\(\[].*?[\)\]]")
+_PUNCTUATION = re.compile(r"[^\w\s]")
+
+
+def title_key(title: str) -> str:
+    """Matching form of a song or album title: "Blinded by Fear (Remastered)" and
+    "Blinded By Fear" are the same song, "Deceiver of the Gods [Deluxe Edition]" and
+    "Deceiver of the Gods" the same album."""
+    return normalize(_PUNCTUATION.sub(" ", _BRACKETS.sub(" ", title)))

@@ -5,7 +5,7 @@ import { api, type ExternalSettings, type ExternalSettingsUpdate } from "../../a
 const LASTFM_CREATE_URL = "https://www.last.fm/api/account/create";
 const FANART_KEY_URL = "https://fanart.tv/get-an-api-key/";
 
-/** Admins: artist information (Last.fm), artist pictures and album covers sources. */
+/** Admins: artist information (Last.fm), artist pictures, album covers sources and discographies (MusicBrainz). */
 export function ExternalSection() {
   const [settings, setSettings] = useState<ExternalSettings | null>(null);
   const [busy, setBusy] = useState(false);
@@ -101,7 +101,25 @@ export function ExternalSection() {
           })}
         </select>
       </label>
-      <p className="text-muted">Album covers are searched on every source that is set up (the pen on an album cover).</p>
+      <p className="text-muted">
+        Album covers are searched on every source that is set up (the pen on an album cover); the Cover Art Archive
+        needs a MusicBrainz release group id in the tags.
+      </p>
+
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={settings.musicbrainz}
+          disabled={busy}
+          onChange={(e) =>
+            void save(
+              { musicbrainz: e.target.checked },
+              e.target.checked ? "MusicBrainz lookups turned on." : "MusicBrainz lookups turned off.",
+            )
+          }
+        />
+        Look up artist discographies on MusicBrainz ("Missing albums" on artist pages, no key needed; kept 7 days)
+      </label>
       {message && <p className={message.ok ? "text-success" : "text-error"}>{message.text}</p>}
     </section>
   );

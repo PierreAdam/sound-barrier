@@ -2,7 +2,18 @@
 
 from fastapi import APIRouter
 
-from app.api import auth, covers, external, library, manage, preferences, queue, tags
+from app.api import (
+    auth,
+    covers,
+    discography,
+    external,
+    library,
+    manage,
+    plugins,
+    preferences,
+    queue,
+    tags,
+)
 
 
 def build_router() -> APIRouter:
@@ -14,5 +25,7 @@ def build_router() -> APIRouter:
     router.include_router(queue.router)
     router.include_router(external.router)
     router.include_router(covers.router)
+    router.include_router(discography.router)
+    router.include_router(plugins.router)
     router.include_router(tags.router)
     return router

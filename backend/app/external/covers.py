@@ -1,8 +1,8 @@
 """Album cover search (admins choosing a cover), from several possible sources.
 
-Each source is a `CoverProvider`; Deezer is the first one. Downloads are only allowed from
-the hosts a provider declares (`hosts`): the web UI sends back image URLs, which must not
-make the server fetch anything else.
+Each source is a `CoverProvider` (Deezer, fanart.tv, the Cover Art Archive). Downloads are
+only allowed from the hosts a provider declares (`hosts`): the web UI sends back image
+URLs, which must not make the server fetch anything else.
 """
 
 from abc import ABC, abstractmethod
@@ -13,7 +13,9 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from app.core.text import normalize, title_key
 from app.external import ExternalServiceError, fanart
+from app.external.pictures import best_match
 
 MAX_IMAGE_BYTES = 15 * 1024 * 1024
 
@@ -129,7 +131,82 @@ class FanartCovers(CoverProvider):
         ]
 
 
-COVER_PROVIDERS: dict[str, CoverProvider] = {p.id: p for p in (DeezerCovers(), FanartCovers())}
+class CoverArtArchiveCovers(CoverProvider):
+    """MusicBrainz's cover archive: the release group's front covers (only with a
+    MusicBrainz release group id; the text query is not used)."""
+
+    id = "coverartarchive"
+    label = "Cover Art Archive"
+    hosts = ("coverartarchive.org", "archive.org")  # images are redirected to archive.org
+    API_URL = "https://coverartarchive.org/release-group"
+
+    async def search(
+        self, http: httpx.AsyncClient, query: str, context: CoverContext
+    ) -> list[CoverResult]:
+        group = context.release_group_id
+        if not group:
+            return []
+        try:
+            response = await http.get(f"{self.API_URL}/{group}")
+        except httpx.HTTPError as error:
+            raise ExternalServiceError(f"Cover Art Archive is not reachable: {error}") from error
+        if response.status_code == 404:  # no cover for this release group
+            return []
+        if response.status_code != 200:
+            raise ExternalServiceError(f"Cover Art Archive error (HTTP {response.status_code})")
+        try:
+            images: list[dict[str, Any]] = response.json().get("images") or []
+        except ValueError as error:
+            raise ExternalServiceError("Invalid answer from Cover Art Archive") from error
+        results: list[CoverResult] = []
+        for image in images:
+            url = image.get("image")
+            if not image.get("front") or not isinstance(url, str):
+                continue
+            thumbnails: dict[str, Any] = image.get("thumbnails") or {}
+            thumbnail = thumbnails.get("500") or thumbnails.get("large") or url
+            results.append(
+                CoverResult(
+                    source=self.id,
+                    title=query,
+                    artist="",
+                    image_url=_https(url),
+                    thumbnail_url=_https(str(thumbnail)),
+                    page_url=f"https://musicbrainz.org/release-group/{group}",
+                )
+            )
+        return results
+
+
+def _https(url: str) -> str:
+    return "https://" + url.removeprefix("http://") if url.startswith("http://") else url
+
+
+COVER_PROVIDERS: dict[str, CoverProvider] = {
+    p.id: p for p in (DeezerCovers(), FanartCovers(), CoverArtArchiveCovers())
+}
+# Order tried when a cover is chosen automatically: exact ones (by MusicBrainz id) first.
+AUTOMATIC_ORDER = ("coverartarchive", "fanarttv", "deezer")
+
+
+async def find_cover(
+    http: httpx.AsyncClient, artist: str, title: str, context: CoverContext
+) -> CoverResult | None:
+    """The best cover of an album without asking anyone: the first source that has one.
+    Deezer searches by text, so its answer must be this artist and this title."""
+    for provider_id in AUTOMATIC_ORDER:
+        provider = COVER_PROVIDERS[provider_id]
+        results = await provider.search(http, f"{artist} {title}", context)
+        if provider_id == "deezer":
+            wanted = title_key(title)
+            same_title = [r for r in results if title_key(r.title) == wanted]
+            # "Versus the World" before "Versus the World (Live)".
+            same_title.sort(key=lambda r: normalize(r.title) != normalize(title))
+            index = best_match(artist, [r.artist for r in same_title])
+            results = [same_title[index]] if index is not None else []
+        if results:
+            return results[0]
+    return None
 
 
 def provider_for(url: str) -> CoverProvider | None:

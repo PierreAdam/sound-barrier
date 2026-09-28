@@ -1243,6 +1243,245 @@ a {
   }
 }
 
+// Artist page: missing albums (discography from MusicBrainz) ------------------
+
+.discography {
+  display: flex;
+  flex-direction: column;
+  gap: @space-5;
+
+  &__filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: @space-2 @space-4;
+    padding: @space-3 @space-4;
+    border: 1px solid @color-border;
+    border-radius: @radius-md;
+    background: @color-surface;
+  }
+
+  &__category {
+    color: @color-text;
+  }
+
+  &__count {
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+  }
+
+  &__shortcuts {
+    display: inline-flex;
+    gap: @space-3;
+    margin-left: auto;
+    font-size: @font-size-sm;
+  }
+
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: @space-3;
+  }
+
+  &__title {
+    font-size: @font-size-lg;
+    font-weight: 600;
+  }
+
+  &__upcoming {
+    margin-left: @space-2;
+  }
+
+  &__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: @space-3;
+
+    .credit {
+      margin: 0 auto 0 0;
+    }
+  }
+}
+
+// A release group in "Missing albums": owned ones are dimmed and marked.
+.release-card {
+  &__cover {
+    position: relative;
+    display: block;
+  }
+
+  &__owned {
+    position: absolute;
+    inset: auto 0 0;
+    padding: @space-1 @space-2;
+    background: color-mix(in srgb, @color-accent 85%, transparent);
+    color: @color-accent-contrast;
+    font-size: @font-size-xs;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  &--owned .album-card__cover {
+    opacity: 0.45;
+    filter: grayscale(0.6);
+  }
+
+  &--owned:hover .album-card__cover {
+    opacity: 0.8;
+  }
+}
+
+// Admins: a missing album's card opens a menu of ways to find it (plugins' links).
+.release-menu {
+  position: relative;
+
+  &__panel {
+    position: absolute;
+    z-index: 20;
+    top: @space-6;
+    left: @space-2;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: max-content;
+    min-width: 220px;
+    max-width: 320px;
+    max-height: 360px;
+    padding: @space-2;
+    overflow-y: auto;
+    border: 1px solid @color-border;
+    border-radius: @radius-md;
+    background: @color-surface-raised;
+    box-shadow: @shadow-panel;
+  }
+
+  &__title {
+    margin: 0 0 @space-1;
+    padding: 0 @space-2;
+    overflow: hidden;
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__plugin {
+    margin: @space-1 0 0;
+    padding: 0 @space-2;
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    width: 100%; // the whole row is clickable (buttons shrink to their content otherwise)
+    gap: @space-2;
+    padding: @space-2;
+    border: 0;
+    border-radius: @radius-sm;
+    background: transparent;
+    color: @color-text;
+    font: inherit;
+    font-size: @font-size-sm;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: @color-surface-hover;
+    }
+
+    &--musicbrainz {
+      margin-top: @space-1;
+      border-top: 1px solid @color-border;
+      border-radius: 0 0 @radius-sm @radius-sm;
+    }
+  }
+
+  &__icon {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    border-radius: 3px;
+
+    &--none {
+      display: inline-block;
+    }
+  }
+
+  &__method {
+    margin-left: auto;
+    color: @color-text-muted;
+    font-size: 0.625rem;
+    font-weight: 600;
+  }
+}
+
+.release-card__button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+// Admins: linking an artist to MusicBrainz.
+.mb-link {
+  display: flex;
+  flex-direction: column;
+  gap: @space-3;
+  width: 100%;
+  max-width: 720px;
+
+  &__title {
+    font-size: @font-size-base;
+    font-weight: 600;
+  }
+
+  &__candidates {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    border: 1px solid @color-border;
+    border-radius: @radius-sm;
+    list-style: none;
+  }
+
+  &__candidate {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: @space-3;
+    padding: @space-2 @space-3;
+    font-size: @font-size-sm;
+
+    & + & {
+      border-top: 1px solid @color-border;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: @space-3;
+  }
+}
+
 // Album page ----------------------------------------------------------------
 
 .album-header {
@@ -1826,6 +2065,10 @@ a {
   }
 }
 
+.text-warning {
+  color: @color-warning;
+}
+
 .text-success {
   color: @color-accent;
 }
@@ -1840,6 +2083,121 @@ a {
 
 select.field__input {
   cursor: pointer;
+}
+
+// Settings → Plugins: the form each plugin describes.
+.plugin {
+  display: flex;
+  flex-direction: column;
+  gap: @space-3;
+
+  & + & {
+    padding-top: @space-4;
+    border-top: 1px solid @color-border;
+  }
+
+  &__name {
+    color: @color-text;
+    font-size: @font-size-base;
+    font-weight: 600;
+  }
+
+  &__textarea {
+    min-height: 64px;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: @font-size-sm;
+    resize: vertical;
+  }
+}
+
+.field__help {
+  font-size: @font-size-xs;
+}
+
+// Rows of a plugin's list field, reordered by drag and drop.
+.plugin-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid @color-border;
+  border-radius: @radius-sm;
+  list-style: none;
+
+  &:empty {
+    display: none;
+  }
+
+  &__row {
+    transition: background @transition;
+
+    & + & {
+      border-top: 1px solid @color-border;
+    }
+
+    &--dragged {
+      opacity: 0.4;
+    }
+
+    &--over {
+      box-shadow: inset 0 2px 0 @color-accent;
+    }
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: @space-2;
+    padding: @space-2 @space-3;
+  }
+
+  &__handle {
+    padding: 0 @space-1;
+    border: 0;
+    background: none;
+    color: @color-text-muted;
+    font-size: @font-size-lg;
+    line-height: 1;
+    cursor: grab;
+
+    &:focus-visible {
+      outline: 2px solid @color-focus;
+    }
+  }
+
+  &__icon {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    border-radius: 4px;
+
+    &--none {
+      display: inline-block;
+      background: @color-surface-raised;
+    }
+  }
+
+  &__title {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    background: none;
+    color: @color-text;
+    font: inherit;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: @space-3;
+    padding: 0 @space-3 @space-3 calc(@space-3 + 28px);
+  }
 }
 
 // Forms: fields side by side, wrapping on narrow screens.

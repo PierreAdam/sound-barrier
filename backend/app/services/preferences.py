@@ -1,7 +1,8 @@
 """Per-user preferences of the web UI, stored with the user (`app_user.preferences`).
 
 Only what should follow the user from one device to another lives here (theme, player
-crossfade); per-device settings (volume, shuffle...) stay in the browser.
+crossfade, categories of "Missing albums"); per-device settings (volume, shuffle...) stay
+in the browser.
 """
 
 import logging
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 MAX_CROSSFADE_SECONDS = 12
 _ACCENT = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
+_CATEGORY = re.compile(r"^[a-z][a-z0-9 +/-]{0,119}$")  # e.g. "album+live", "mixtape/street"
 
 
 class _Model(BaseModel):
@@ -43,9 +45,29 @@ class PlayerPreferences(_Model):
     crossfade_seconds: Annotated[float, Field(ge=1, le=MAX_CROSSFADE_SECONDS)] = 5
 
 
+def _default_categories() -> list[str]:
+    return ["album"]
+
+
+class DiscographyPreferences(_Model):
+    # Release group categories shown in "Missing albums" (musicbrainz.category), for all
+    # artists: only plain albums unless the user chooses more.
+    categories: Annotated[list[str], Field(max_length=100)] = Field(
+        default_factory=_default_categories
+    )
+
+    @field_validator("categories")
+    @classmethod
+    def _check_categories(cls, value: list[str]) -> list[str]:
+        if any(not _CATEGORY.match(c) for c in value):
+            raise ValueError("categories must be MusicBrainz release group types")
+        return sorted(set(value))
+
+
 class Preferences(_Model):
     theme: ThemePreferences = Field(default_factory=ThemePreferences)
     player: PlayerPreferences = Field(default_factory=PlayerPreferences)
+    discography: DiscographyPreferences = Field(default_factory=DiscographyPreferences)
 
 
 def get(user: AppUser) -> Preferences:

@@ -44,6 +44,18 @@ Decisions taken on what is left to do (2026-09-28). The design of what exists is
    Manage Library → Library): beets' leftover database backups (`library.db-before-*.bak`),
    beets entries whose file is gone, abandoned import staging folders, old cached covers.
 
+### 5. Discography
+
+1. **Artist action bar and missing albums** (spec:
+   [docs/specs/missing-albums.md](docs/specs/missing-albums.md)): "Play all", "Add to
+   queue", "Play next" and a "Missing albums" view on the artist page, from the artist's
+   MusicBrainz discography, filtered by release type combination (only "Album" by default,
+   saved in the user preferences).
+2. **Plugins and album search links** (spec:
+   [docs/specs/album-sources.md](docs/specs/album-sources.md)): embedded plugins with their
+   own settings; the first one gives admins search links (GET or POST, icons) for missing
+   albums.
+
 ## Maybe later
 
 - **Moved / renamed files keep their user data** (play counts, stars, playlists): today a

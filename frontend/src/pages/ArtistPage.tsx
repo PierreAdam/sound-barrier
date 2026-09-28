@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { api, type ArtistInfo } from "../api/native";
 import { useSubsonic } from "../api/useSubsonic";
@@ -7,13 +7,23 @@ import { useSession } from "../auth/AuthContext";
 import { AlbumCard } from "../components/AlbumCard";
 import { CoverArt } from "../components/CoverArt";
 import { SongTable } from "../components/SongTable";
-import { RefreshIcon } from "../components/Icons";
+import { AddIcon, DiscIcon, PlayIcon, PlayNextIcon, RefreshIcon } from "../components/Icons";
 import { plural } from "../format";
+import { songToTrack, usePlayer, type Track } from "../player/PlayerContext";
+import { MissingAlbums } from "./artist/MissingAlbums";
+import { settingsUrl } from "./settings/tabs";
 
-/** Artist view: header, albums, then biography, similar artists and top songs. */
+/**
+ * Artist view: header, actions, albums (or the missing ones, from MusicBrainz), then
+ * biography, similar artists and top songs.
+ */
 export function ArtistPage() {
   const { id = "" } = useParams();
-  const { user } = useSession();
+  const { user, client } = useSession();
+  const { engine } = usePlayer();
+  const [params, setParams] = useSearchParams();
+  const missingView = params.get("view") === "missing";
+  const [loadingSongs, setLoadingSongs] = useState(false);
   const { data, error, loading } = useSubsonic("getArtist", { id });
   const artist = data?.artist;
   const albums = artist?.album ?? [];
@@ -50,6 +60,23 @@ export function ArtistPage() {
     }
   }, [id]);
 
+  /** The songs of the albums shown, album after album (oldest first). */
+  async function withSongs(action: (tracks: Track[]) => void) {
+    setLoadingSongs(true);
+    try {
+      const loaded = await Promise.all(albums.map((album) => client.call("getAlbum", { id: album.id })));
+      action(loaded.flatMap((response) => (response.album.song ?? []).map(songToTrack)));
+    } catch (e) {
+      console.error(`Cannot load the songs of artist ${id}`, e);
+    } finally {
+      setLoadingSongs(false);
+    }
+  }
+
+  function toggleMissing() {
+    setParams(missingView ? {} : { view: "missing" }, { replace: true });
+  }
+
   if (error) return <p className="text-error">{error.message}</p>;
   if (loading && !artist) return <p className="text-muted">Loading…</p>;
   if (!artist) return null;
@@ -70,13 +97,57 @@ export function ArtistPage() {
         </div>
       </header>
 
-      <ul className="album-grid">
-        {albums.map((album) => (
-          <li key={album.id}>
-            <AlbumCard album={album} />
-          </li>
-        ))}
-      </ul>
+      <nav className="action-bar" aria-label="Artist actions">
+        <button
+          className="action-bar__item"
+          type="button"
+          disabled={!albums.length || loadingSongs}
+          onClick={() => void withSongs((tracks) => engine.playQueue(tracks, 0))}
+        >
+          <PlayIcon />
+          Play all
+        </button>
+        <button
+          className="action-bar__item"
+          type="button"
+          disabled={!albums.length || loadingSongs}
+          onClick={() => void withSongs((tracks) => engine.add(tracks))}
+        >
+          <AddIcon />
+          Add to queue
+        </button>
+        <button
+          className="action-bar__item"
+          type="button"
+          disabled={!albums.length || loadingSongs}
+          onClick={() => void withSongs((tracks) => engine.playNext(tracks))}
+        >
+          <PlayNextIcon />
+          Play next
+        </button>
+        <button
+          className={`action-bar__item${missingView ? " action-bar__item--active" : ""}`}
+          type="button"
+          aria-pressed={missingView}
+          onClick={toggleMissing}
+          title="The artist's discography on MusicBrainz, compared with the library"
+        >
+          <DiscIcon />
+          Missing albums
+        </button>
+      </nav>
+
+      {missingView ? (
+        <MissingAlbums artistId={id} name={artist.name} admin={user.adminRole} />
+      ) : (
+        <ul className="album-grid">
+          {albums.map((album) => (
+            <li key={album.id}>
+              <AlbumCard album={album} />
+            </li>
+          ))}
+        </ul>
+      )}
 
       {infoError && <p className="text-error">Artist information: {infoError}</p>}
       {!info && !infoError && <p className="text-muted">Loading artist information…</p>}
@@ -141,7 +212,7 @@ function ArtistDetails({
           <div className="about-body__text">
             {admin && (
               <p className="text-muted">
-                Add a Last.fm API key in <Link className="link" to="/settings">Settings</Link> (External services) to
+                Add a Last.fm API key in <Link className="link" to={settingsUrl("external")}>Settings → External services</Link> to
                 show biographies, similar artists and top songs.
               </p>
             )}

@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { api, type BrowseResponse, type ImportJob, type ManageSettings } from "../../api/native";
 import { FolderIcon, MusicNoteIcon } from "../../components/Icons";
 import { formatSize, plural } from "../../format";
+import { settingsUrl } from "../settings/tabs";
 import type { Imports } from "./useImports";
 
 export const STATUS_LABELS: Record<string, string> = {
@@ -31,7 +32,7 @@ export function ImportTab({ settings, imports, onReview }: Props) {
       <div className="empty-state">
         <p>No import root folder yet.</p>
         <p className="text-muted">
-          Set the folder where new music arrives in <Link to="/settings">Settings → Import</Link>.
+          Set the folder where new music arrives in <Link to={settingsUrl("import")}>Settings → Import</Link>.
         </p>
       </div>
     );
@@ -101,7 +102,7 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
         <span className="browser__path" title={settings.root ?? undefined}>
           {settings.root}
         </span>
-        <Link className="button button--ghost" to="/settings">
+        <Link className="button button--ghost" to={settingsUrl("import")}>
           Change
         </Link>
       </div>

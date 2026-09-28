@@ -1,11 +1,13 @@
-"""Clients of external services (Last.fm, picture providers). Only artist names and
-MusicBrainz ids are sent; nothing about the users."""
+"""Clients of external services (Last.fm, MusicBrainz, picture providers). Only artist
+names, album titles and MusicBrainz ids are sent; nothing about the users."""
 
 import httpx
 
 from app import __version__
 
-USER_AGENT = f"Sound-Barrier/{__version__} (self-hosted music server)"
+# MusicBrainz asks for a way to contact the application's authors.
+PROJECT_URL = "https://github.com/PierreAdam/sound-barrier"
+USER_AGENT = f"Sound-Barrier/{__version__} (+{PROJECT_URL})"
 TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 
 

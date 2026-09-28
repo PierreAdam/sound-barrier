@@ -131,3 +131,10 @@ compare API responses on the same library: `docker compose --profile reference u
 ## License
 
 [MIT](LICENSE)
+
+Sound-Barrier's own source code is MIT-licensed. Its third-party dependencies keep their own
+licenses. Two runtime dependencies, [mutagen](https://github.com/quodlibet/mutagen) and
+[Unidecode](https://pypi.org/project/Unidecode/) (via beets), are GPL-2.0-or-later, so
+distributed builds that bundle them, such as the Docker image, are also subject to their terms.
+The Docker image also ships [ffmpeg](https://ffmpeg.org/legal.html), which runs as a separate
+program under its own license.
