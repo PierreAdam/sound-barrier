@@ -14,6 +14,7 @@ fanart.tv, Deezer), fetched once and kept in the data folder.
 import asyncio
 import logging
 import uuid
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -27,14 +28,13 @@ from app.core.text import normalize, title_key
 from app.external import ExternalServiceError, musicbrainz
 from app.external import covers as sources
 from app.external.musicbrainz import ArtistCandidate, ReleaseGroup
-from app.models import AppUser, Artist, ArtistInfo
+from app.models import Album, AppUser, Artist, ArtistInfo
 from app.plugins.base import WantedAlbum
 from app.services import artist_info, browsing, server_settings
-from app.services.browsing import AlbumEntry
 
 logger = logging.getLogger(__name__)
 
-REFRESH_AFTER = timedelta(days=7)
+REFRESH_AFTER = timedelta(days=1)  # new releases (Manage Library) are checked daily
 RETRY_AFTER = timedelta(days=1)  # after a failure
 RELEASE_LOOKUPS = 10  # release ids resolved per request at most (one second each)
 COVER_RETRY_AFTER = timedelta(days=30)  # when no source had a cover
@@ -123,16 +123,16 @@ async def _refresh(row: ArtistInfo, artist: Artist, http: httpx.AsyncClient, now
 
 
 async def _resolve_releases(
-    row: ArtistInfo, albums: list[AlbumEntry], http: httpx.AsyncClient
+    row: ArtistInfo, albums: Sequence[Album], http: httpx.AsyncClient
 ) -> None:
     """Finds the release group of albums tagged only with a release id (a few per
     request: MusicBrainz allows one call per second)."""
     todo = [
-        a.album.mbz_album_id
+        a.mbz_album_id
         for a in albums
-        if a.album.mbz_album_id
-        and not a.album.mbz_release_group_id
-        and a.album.mbz_album_id not in row.release_groups
+        if a.mbz_album_id
+        and not a.mbz_release_group_id
+        and a.mbz_album_id not in row.release_groups
     ][:RELEASE_LOOKUPS]
     if not todo:
         return
@@ -146,7 +146,7 @@ async def _resolve_releases(
     row.release_groups = found  # a new dict: JSONB changes are not tracked in place
 
 
-def _rank(group: ReleaseGroup) -> tuple[int, int, str]:
+def rank(group: ReleaseGroup) -> tuple[int, int, str]:
     """Category order: primary types as on MusicBrainz, the plain type first."""
     primary = (group.primary_type or "other").casefold()
     index = musicbrainz.PRIMARY_TYPES.index(primary) if primary in musicbrainz.PRIMARY_TYPES else 99
@@ -157,7 +157,7 @@ def _rank(group: ReleaseGroup) -> tuple[int, int, str]:
     )
 
 
-def _label(group: ReleaseGroup) -> str:
+def label(group: ReleaseGroup) -> str:
     return " + ".join([group.primary_type or "Other", *sorted(group.secondary_types)])
 
 
@@ -169,18 +169,17 @@ def _upcoming(first_release_date: str | None, today: date) -> bool:
 
 def match(
     groups: list[ReleaseGroup],
-    albums: list[AlbumEntry],
+    albums: Sequence[Album],
     release_groups: dict[str, str | None],
     today: date,
 ) -> tuple[list[Category], list[DiscographyEntry]]:
     """The release groups in display order (category, then date) with the library album
     each one is, if any, and the categories with their counts."""
-    ordered = sorted(groups, key=lambda g: (_rank(g), g.first_release_date or "9999", g.title))
+    ordered = sorted(groups, key=lambda g: (rank(g), g.first_release_date or "9999", g.title))
     known = {g.mbid for g in groups}
     by_group: dict[str, OwnedAlbum] = {}
     by_title: dict[str, list[OwnedAlbum]] = {}
-    for entry in albums:
-        album = entry.album
+    for album in albums:
         owned = OwnedAlbum(
             album.id, album.name, str(album.artwork_id) if album.artwork_id else None
         )
@@ -208,15 +207,45 @@ def match(
     categories: dict[str, Category] = {}
     for entry in entries:
         category = categories.setdefault(
-            entry.category, Category(entry.category, _label(entry.group), 0, 0)
+            entry.category, Category(entry.category, label(entry.group), 0, 0)
         )
         category.total += 1
         category.missing += entry.owned is None
     return list(categories.values()), entries
 
 
-def _groups(row: ArtistInfo) -> list[ReleaseGroup]:
+def groups_of(row: ArtistInfo) -> list[ReleaseGroup]:
     return [ReleaseGroup(**g) for g in row.discography]
+
+
+def is_stale(row: ArtistInfo | None, now: datetime) -> bool:
+    """Whether the artist's discography must be fetched again."""
+    if row is None:
+        return True
+    failed = row.discography_error is not None
+    return artist_info.stale(row.discography_fetched_at, failed, now, REFRESH_AFTER)
+
+
+async def ensure_fresh(
+    session: AsyncSession,
+    artist: Artist,
+    albums: Sequence[Album],
+    http: httpx.AsyncClient,
+    *,
+    refresh: bool = False,
+) -> ArtistInfo:
+    """The artist's cache row, its discography fetched first if it is old (`refresh`:
+    whatever its age), and its albums' release groups found. The caller commits."""
+    row = await artist_info.info_row(session, artist.id)
+    now = datetime.now(UTC)
+    wanted, _ = _wanted_mbid(row, artist)
+    changed = wanted is not None and wanted != row.discography_mbid
+    if refresh or changed or is_stale(row, now):
+        await _refresh(row, artist, http, now)
+    if row.discography:
+        await _resolve_releases(row, albums, http)
+    await session.flush()
+    return row
 
 
 async def get(
@@ -232,26 +261,17 @@ async def get(
     found = await browsing.get_artist(session, user, artist_id)
     if found is None:
         return None
-    artist, albums = found[0].artist, found[1]
+    artist, albums = found[0].artist, [entry.album for entry in found[1]]
     settings = await server_settings.get_external_services(session)
     if not settings.musicbrainz:
         return Discography(enabled=False)
 
-    row = await artist_info.info_row(session, artist_id)
-    now = datetime.now(UTC)
-    wanted, source = _wanted_mbid(row, artist)
-    stale = artist_info.stale(
-        row.discography_fetched_at, row.discography_error is not None, now, REFRESH_AFTER
-    )
-    if refresh or stale or (wanted is not None and wanted != row.discography_mbid):
-        await _refresh(row, artist, http, now)
-    if row.discography:
-        await _resolve_releases(row, albums, http)
-    await session.flush()
-
+    row = await ensure_fresh(session, artist, albums, http, refresh=refresh)
+    _, source = _wanted_mbid(row, artist)
     if source is None and row.discography_mbid:
         source = "search"
-    categories, entries = match(_groups(row), albums, row.release_groups, now.date())
+    today = datetime.now(UTC).date()
+    categories, entries = match(groups_of(row), albums, row.release_groups, today)
     return Discography(
         enabled=True,
         artist_mbid=row.discography_mbid,
@@ -269,7 +289,7 @@ async def wanted(session: AsyncSession, artist_id: uuid.UUID, group: str) -> Wan
     row = await session.get(ArtistInfo, artist_id)
     if artist is None or row is None:
         return None
-    entry = next((g for g in _groups(row) if g.mbid == group), None)
+    entry = next((g for g in groups_of(row) if g.mbid == group), None)
     if entry is None:
         return None
     return WantedAlbum(

@@ -258,7 +258,7 @@ export interface UserPreferences {
   theme: Appearance;
   player: { crossfade: boolean; crossfadeSeconds: number };
   /** Release group categories shown in "Missing albums" (e.g. "album", "album+live"). */
-  discography: { categories: string[] };
+  discography: { categories: string[]; recentMonths: number }; // recentMonths: New releases, 1 to 12
 }
 
 // --- web play queue ------------------------------------------------------------
@@ -330,6 +330,35 @@ export interface Discography {
   error: string | null; // admins only
   categories: { key: string; label: string; total: number; missing: number }[]; // display order
   releaseGroups: ReleaseGroup[]; // by category, then date
+}
+
+/** A release of an artist of the library that the library does not have (New releases). */
+export interface NewRelease extends ReleaseGroup {
+  artistId: string;
+  artistName: string;
+  monthUnknown: boolean; // only the year is known
+}
+
+/** The background refresh of the discographies (server side: it goes on without the page). */
+export interface DiscographySync {
+  running: boolean;
+  total: number; // artists to fetch in this run
+  done: number;
+  current: string | null;
+  errors: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface NewReleases {
+  enabled: boolean; // MusicBrainz lookups allowed in Settings
+  sync: DiscographySync;
+  artists: number;
+  stale: number; // artists whose discography must be fetched (again)
+  upcoming: NewRelease[]; // soonest first
+  recent: NewRelease[]; // newest first
+  categories: { key: string; label: string; count: number }[];
+  unlinked: { id: string; name: string }[]; // not linked to MusicBrainz
 }
 
 export interface MusicBrainzArtist {
@@ -458,6 +487,9 @@ export const api = {
   tryPlugin: (pluginId: string, settings: PluginSettings, field: string, item: number) =>
     request<AlbumLink[]>("POST", `/plugins/${pluginId}/try`, { settings, field, item }),
   pluginAssetUrl: (pluginId: string, name: string) => `/api/plugins/${pluginId}/assets/${name}`,
+  getNewReleases: (months: number) => request<NewReleases>("GET", `/manage/new-releases?months=${months}`),
+  /** Starts refreshing the old discographies (nothing if a refresh is running). */
+  syncNewReleases: () => request<DiscographySync>("POST", "/manage/new-releases/sync"),
   getReleaseGroupLinks: (artistId: string, mbid: string) =>
     request<PluginLinks[]>("GET", `/artists/${artistId}/discography/${mbid}/links`),
 

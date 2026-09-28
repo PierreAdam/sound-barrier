@@ -6,12 +6,16 @@ import { useSession } from "../auth/AuthContext";
 import { DeleteTab } from "./manage/DeleteTab";
 import { ImportTab } from "./manage/ImportTab";
 import { LibraryTab } from "./manage/LibraryTab";
+import { NewReleasesTab } from "./manage/NewReleasesTab";
 import { ReviewTab } from "./manage/ReviewTab";
 import { useImports } from "./manage/useImports";
 
-type Tab = "library" | "import" | "review" | "delete";
+type Tab = "library" | "import" | "review" | "delete" | "new-releases";
 
-/** Admins: library status and beets maintenance, import new music, review album matches, delete music. */
+/**
+ * Admins: library status and beets maintenance, import new music, review album matches,
+ * delete music, new releases of the library's artists.
+ */
 export function ManageLibraryPage() {
   const { user } = useSession();
   const [tab, setTab] = useState<Tab>("library");
@@ -34,6 +38,7 @@ export function ManageLibraryPage() {
     { id: "import", label: "Import" },
     { id: "review", label: reviewCount ? `Review (${reviewCount})` : "Review" },
     { id: "delete", label: "Delete" },
+    { id: "new-releases", label: "New releases" },
   ];
 
   return (
@@ -76,6 +81,7 @@ export function ManageLibraryPage() {
         />
       )}
       {tab === "delete" && <DeleteTab />}
+      {tab === "new-releases" && <NewReleasesTab />}
     </div>
   );
 }

@@ -9,6 +9,7 @@ from app.api import (
     external,
     library,
     manage,
+    new_releases,
     plugins,
     preferences,
     queue,
@@ -21,6 +22,7 @@ def build_router() -> APIRouter:
     router.include_router(auth.router)
     router.include_router(library.router)
     router.include_router(manage.router)
+    router.include_router(new_releases.router)
     router.include_router(preferences.router)
     router.include_router(queue.router)
     router.include_router(external.router)

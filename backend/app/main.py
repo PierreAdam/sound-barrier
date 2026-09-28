@@ -16,6 +16,7 @@ from app.library_manager import get_tagger
 from app.library_manager.imports import ImportManager
 from app.services import first_start, users
 from app.services.maintenance import LibraryRoot, Maintenance
+from app.services.new_releases import DiscographySync
 from app.services.scans import ScanManager
 from app.subsonic import build_router
 from app.web import mount_web
@@ -46,6 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             staging_root=settings.data_dir / "import-staging",
         )
         await imports.start()
+        app.state.discography_sync = discography_sync = DiscographySync(db)
         app.state.maintenance = maintenance = Maintenance(
             db, imports, settings.data_dir, settings.beets_dir or settings.data_dir / "beets"
         )
@@ -62,6 +64,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             scheduler.cancel()
         if cleanups is not None:
             cleanups.cancel()
+        await discography_sync.stop()
         await imports.stop()
         await scans.stop()
         await http.aclose()

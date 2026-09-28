@@ -9,7 +9,7 @@ pytestmark = pytest.mark.integration
 DEFAULTS = {
     "theme": {"mode": "dark", "accent": "teal"},
     "player": {"crossfade": False, "crossfadeSeconds": 5},
-    "discography": {"categories": ["album"]},
+    "discography": {"categories": ["album"], "recentMonths": 6},
 }
 
 
@@ -21,7 +21,7 @@ async def test_preferences_are_saved_per_user(
         wanted = {
             "theme": {"mode": "light", "accent": "violet"},
             "player": {"crossfade": True, "crossfadeSeconds": 8},
-            "discography": {"categories": ["album", "album+live", "ep"]},
+            "discography": {"categories": ["album", "album+live", "ep"], "recentMonths": 3},
         }
         response = await client.put("/api/preferences", json=wanted)
         assert response.json() == wanted
@@ -41,6 +41,7 @@ async def test_preferences_are_saved_per_user(
         {"theme": {"accent": "Not A Color!"}},
         {"player": {"crossfadeSeconds": 60}},
         {"discography": {"categories": ["Album; DROP"]}},
+        {"discography": {"recentMonths": 13}},
     ],
 )
 async def test_invalid_preferences_are_refused(

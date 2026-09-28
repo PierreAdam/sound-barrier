@@ -55,6 +55,9 @@ Decisions taken on what is left to do (2026-09-28). The design of what exists is
    [docs/specs/album-sources.md](docs/specs/album-sources.md)): embedded plugins with their
    own settings; the first one gives admins search links (GET or POST, icons) for missing
    albums.
+3. **New releases** (Manage Library): recent (1 to 12 months) and upcoming releases of
+   every album artist that the library does not have, from their MusicBrainz discographies
+   refreshed daily by a background job (progress shown on the page).
 
 ## Maybe later
 

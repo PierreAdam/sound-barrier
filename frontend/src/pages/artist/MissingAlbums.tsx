@@ -112,7 +112,14 @@ export function MissingAlbums({ artistId, name, admin }: { artistId: string; nam
 
   return (
     <section className="discography">
-      <CategoryFilter discography={discography} />
+      <CategoryFilter
+        categories={discography.categories.map((c) => ({
+          key: c.key,
+          label: c.label,
+          count: `${c.missing}/${c.total}`,
+          title: `${c.missing} missing of ${c.total}`,
+        }))}
+      />
       <DiscographySections artistId={artistId} discography={discography} admin={admin} />
       <div className="discography__footer">
         <p className="credit">
@@ -137,23 +144,37 @@ export function MissingAlbums({ artistId, name, admin }: { artistId: string; nam
   );
 }
 
-/** One checkbox per category of this artist; the choice is saved for all artists. */
-function CategoryFilter({ discography }: { discography: Discography }) {
+/** A category checkbox: "Album + Live", with a count ("2/7") and its explanation. */
+export interface FilterCategory {
+  key: string;
+  label: string;
+  count: string;
+  title: string;
+}
+
+/** The categories the user chose (shared by Missing albums and New releases). */
+export function useChosenCategories(): Set<string> {
+  const { preferences } = usePreferences();
+  return new Set(preferences?.discography.categories ?? DEFAULT_CATEGORIES);
+}
+
+/** One checkbox per category; the choice is saved for all artists (and New releases). */
+export function CategoryFilter({ categories }: { categories: FilterCategory[] }) {
   const { preferences, update } = usePreferences();
-  const chosen = new Set(preferences?.discography.categories ?? DEFAULT_CATEGORIES);
+  const chosen = useChosenCategories();
 
   function choose(change: (current: Set<string>) => void) {
     update((current) => {
       const next = new Set(current.discography.categories);
       change(next);
-      return { ...current, discography: { categories: [...next].sort() } };
+      return { ...current, discography: { ...current.discography, categories: [...next].sort() } };
     });
   }
-  const keys = discography.categories.map((c) => c.key);
+  const keys = categories.map((c) => c.key);
 
   return (
     <div className="discography__filter" role="group" aria-label="Categories">
-      {discography.categories.map((category) => (
+      {categories.map((category) => (
         <label key={category.key} className="checkbox discography__category">
           <input
             type="checkbox"
@@ -164,8 +185,8 @@ function CategoryFilter({ discography }: { discography: Discography }) {
             }
           />
           {category.label}
-          <span className="discography__count" title={`${category.missing} missing of ${category.total}`}>
-            {category.missing}/{category.total}
+          <span className="discography__count" title={category.title}>
+            {category.count}
           </span>
         </label>
       ))}
@@ -190,8 +211,7 @@ function DiscographySections({
   discography: Discography;
   admin: boolean;
 }) {
-  const { preferences } = usePreferences();
-  const chosen = new Set(preferences?.discography.categories ?? DEFAULT_CATEGORIES);
+  const chosen = useChosenCategories();
   const shown = discography.categories.filter((c) => chosen.has(c.key));
 
   if (!discography.releaseGroups.length) return <p className="text-muted">MusicBrainz lists no release for this artist.</p>;
@@ -221,11 +241,25 @@ function DiscographySections({
   );
 }
 
-function ReleaseGroupCard({ artistId, group, admin }: { artistId: string; group: ReleaseGroup; admin: boolean }) {
+/**
+ * A release group: owned ones link to the album page; missing ones open the ways to find
+ * them (admins) or MusicBrainz. `details` replaces the year line (e.g. artist and date).
+ */
+export function ReleaseGroupCard({
+  artistId,
+  group,
+  admin,
+  details,
+}: {
+  artistId: string;
+  group: ReleaseGroup;
+  admin: boolean;
+  details?: ReactNode;
+}) {
   const year = group.firstReleaseDate?.slice(0, 4);
   const info = (
     <span className="album-card__info">
-      {year ?? " "}
+      {details ?? year ?? " "}
       {group.upcoming && <span className="badge discography__upcoming">Upcoming</span>}
     </span>
   );

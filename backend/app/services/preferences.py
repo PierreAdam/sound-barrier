@@ -55,6 +55,8 @@ class DiscographyPreferences(_Model):
     categories: Annotated[list[str], Field(max_length=100)] = Field(
         default_factory=_default_categories
     )
+    # New releases (Manage Library): the last N months.
+    recent_months: Annotated[int, Field(ge=1, le=12)] = 6
 
     @field_validator("categories")
     @classmethod

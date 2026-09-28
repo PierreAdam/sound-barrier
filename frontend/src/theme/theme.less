@@ -1300,6 +1300,33 @@ a {
   }
 }
 
+// Manage Library → New releases: the same cards and filter as "Missing albums".
+.new-releases {
+  display: flex;
+  flex-direction: column;
+  gap: @space-5;
+
+  &__tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: @space-4;
+
+    .field__input {
+      width: auto;
+    }
+  }
+
+  &__progress {
+    width: 100%;
+
+    .meter {
+      width: 100%;
+      max-width: 480px;
+    }
+  }
+}
+
 // A release group in "Missing albums": owned ones are dimmed and marked.
 .release-card {
   &__cover {
