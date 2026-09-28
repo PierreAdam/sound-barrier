@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Sound-Barrier</title>
+  <rect width="64" height="64" rx="14" fill="#121418"/>
+  <polygon points="20,20 40,32 20,44" fill="#1db8a0" stroke="#1db8a0" stroke-width="3" stroke-linejoin="round"/>
+  <polyline points="15,11 51,32 15,53" fill="none" stroke="#1db8a0" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

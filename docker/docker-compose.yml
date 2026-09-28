@@ -1,0 +1,44 @@
+# Sound-Barrier on a server: the application and its Postgres database.
+#   cp docker/.env.example docker/.env   (then edit it)
+#   docker compose -f docker/docker-compose.yml up -d --build
+# Web UI and Subsonic clients: http://<server>:4040 (first login admin / admin).
+
+name: sound-barrier
+
+services:
+  sound-barrier:
+    build: ..
+    image: sound-barrier:latest
+    restart: unless-stopped
+    # Owner (uid:gid) of the music files: imports write into the library as this user.
+    user: "${PUID:-1000}:${PGID:-1000}"
+    ports:
+      - "${PORT:-4040}:4040"
+    environment:
+      TZ: ${TZ:-UTC} # scan schedule times are in this time zone
+      SOUND_BARRIER_DATABASE_URL: postgresql+asyncpg://soundbarrier:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/soundbarrier
+      # Behind a reverse proxy (HTTPS): trust its X-Forwarded-* headers.
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+    volumes:
+      - ${MUSIC_DIR:?set MUSIC_DIR in .env}:/music
+      - ${IMPORT_DIR:?set IMPORT_DIR in .env}:/import:ro # imports copy, never modify
+      - ${BEETS_DIR:-./beets}:/beets
+      - ${DATA_DIR:-./data}:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: soundbarrier
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: soundbarrier
+    volumes:
+      - ${POSTGRES_DIR:-./postgres}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soundbarrier -d soundbarrier"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

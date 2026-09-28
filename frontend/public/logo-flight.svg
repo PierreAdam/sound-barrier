@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Sound-Barrier</title>
+  <style>
+    /* Shock front: a bright dash sweeping from the nose along each leg of the cone. */
+    .front {
+      fill: none;
+      stroke: #a6f7ea;
+      stroke-width: 4.5;
+      stroke-linecap: round;
+      stroke-dasharray: 9 80;
+      animation: sweep 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    /* Disturbed air: short ripples shed behind the plane, drifting away and fading. */
+    .air {
+      fill: none;
+      stroke: #1db8a0;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      opacity: 0;
+      animation: wake 1.8s ease-out infinite;
+    }
+    .air.a2 { animation-delay: 0.3s; }
+    .air.a3 { animation-delay: 0.6s; }
+    /* Slight buffeting of the plane as it pushes through the barrier. */
+    .plane { animation: buffet 1.8s ease-in-out infinite; }
+    @keyframes sweep {
+      0% { stroke-dashoffset: 9; opacity: 0; }
+      10% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { stroke-dashoffset: -42; opacity: 0; }
+    }
+    @keyframes wake {
+      0% { transform: translateX(0); opacity: 0; }
+      20% { opacity: 0.85; }
+      100% { transform: translateX(-12px); opacity: 0; }
+    }
+    @keyframes buffet {
+      0%, 100% { transform: translate(0, 0); }
+      15% { transform: translate(0.6px, -0.4px); }
+      30% { transform: translate(0, 0.3px); }
+      45% { transform: translate(0.3px, 0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .front, .air, .plane { animation: none; }
+      .front, .air { opacity: 0; }
+    }
+  </style>
+  <defs>
+    <clipPath id="tile"><rect width="64" height="64" rx="14"/></clipPath>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#121418"/>
+  <g clip-path="url(#tile)">
+    <path class="air" d="M8 27 q1.5 -2 3 0 t3 0 t3 0"/>
+    <path class="air a2" d="M6 32 q1.5 -2 3 0 t3 0 t3 0 t3 0"/>
+    <path class="air a3" d="M8 37 q1.5 -2 3 0 t3 0 t3 0"/>
+  </g>
+  <polyline points="15,11 51,32 15,53" fill="none" stroke="#1db8a0" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline class="front" points="51,32 15,11"/>
+  <polyline class="front" points="51,32 15,53"/>
+  <polygon class="plane" points="20,20 40,32 20,44" fill="#1db8a0" stroke="#1db8a0" stroke-width="3" stroke-linejoin="round"/>
+</svg>

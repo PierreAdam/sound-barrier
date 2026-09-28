@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.coverage
+htmlcov/
+
+# Local configuration and data
+.env
+.env.*
+!.env.example
+backend/data/
+music/
+# Runtime folders of the production compose file, when kept next to it
+docker/beets/
+docker/data/
+docker/postgres/
+
+# Deployment settings (server, account)
+deploy.env
+
+# Frontend
+node_modules/
+frontend/dist/
+coverage/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

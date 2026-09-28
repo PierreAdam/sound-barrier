@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sound-Barrier</title>
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#121418" />
+    <script>
+      // Theme remembered by src/theme/appearance.ts (same key and format), applied before
+      // the page is drawn; the preferences from the server replace it once signed in.
+      (function () {
+        var theme = "dark", accent = "teal";
+        try {
+          var saved = JSON.parse(localStorage.getItem("sound-barrier.appearance") || "{}");
+          theme = saved.mode === "system"
+            ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+            : saved.mode === "light" ? "light" : "dark";
+          accent = typeof saved.accent === "string" ? saved.accent : accent;
+        } catch (e) {}
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.accent = accent;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Sound-Barrier</title>
+  <style>
+    .wave {
+      fill: none;
+      stroke: #1db8a0;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transform-box: view-box;
+      transform-origin: 51px 32px;
+      opacity: 0;
+      animation: boom 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+    }
+    .wave.late { animation-delay: 1.2s; }
+    .play {
+      transform-box: view-box;
+      transform-origin: 30px 32px;
+      animation: beat 2.4s ease-in-out infinite;
+    }
+    @keyframes boom {
+      /* stroke-width shrinks as the wave grows so the visible line stays ~3 units thick */
+      0% { transform: scale(1); stroke-width: 3; opacity: 0.8; }
+      100% { transform: scale(2); stroke-width: 1.5; opacity: 0; }
+    }
+    @keyframes beat {
+      0%, 100% { transform: scale(1); }
+      8% { transform: scale(1.08); }
+      20% { transform: scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .wave, .play { animation: none; }
+    }
+  </style>
+  <defs>
+    <clipPath id="tile"><rect width="64" height="64" rx="14"/></clipPath>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#121418"/>
+  <g clip-path="url(#tile)">
+    <polyline class="wave" points="15,11 51,32 15,53"/>
+    <polyline class="wave late" points="15,11 51,32 15,53"/>
+  </g>
+  <polygon class="play" points="20,20 40,32 20,44" fill="#1db8a0" stroke="#1db8a0" stroke-width="3" stroke-linejoin="round"/>
+  <polyline points="15,11 51,32 15,53" fill="none" stroke="#1db8a0" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

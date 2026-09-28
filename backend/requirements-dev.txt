@@ -1,0 +1,19 @@
+# Development environment: runtime + test/lint tools, pinned, plus the project itself.
+# Install from backend/:  .venv/Scripts/python -m pip install -r requirements-dev.txt
+-r requirements.txt
+
+docker==7.2.0
+iniconfig==2.3.0
+nodeenv==1.11.0
+pluggy==1.6.0
+Pygments==2.21.0
+pyright==1.1.414
+pytest==9.1.1
+pytest-asyncio==1.4.0
+pywin32==312 ; sys_platform == "win32"
+ruff==0.16.9
+testcontainers==4.15.0
+wrapt==2.5.0
+
+# The project itself, editable (provides the `sound-barrier` command).
+-e .

@@ -1,0 +1,11 @@
+**/node_modules
+**/__pycache__
+**/.venv
+**/.pytest_cache
+**/.ruff_cache
+**/.env
+frontend/dist
+backend/data
+backend/tests
+music
+.claude

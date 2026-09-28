@@ -1,0 +1,3020 @@
+// Sound-Barrier web UI theme.
+// Every visual rule lives here; components only use class names.
+// To re-theme, change the palettes in the first section.
+//
+// Colors are CSS custom properties, so the theme can change without reloading: the
+// <html> element carries data-theme="dark|light" and data-accent="<palette>" (set by
+// src/theme/appearance.ts from the user's preferences). Less color functions cannot
+// work on them: translucent variants use color-mix().
+
+// ---------------------------------------------------------------------------
+// Palettes
+// ---------------------------------------------------------------------------
+
+// Dark (default)
+:root {
+  color-scheme: dark;
+  --color-bg: #121418;
+  --color-surface: #1a1d23;
+  --color-surface-raised: #232730;
+  --color-surface-hover: #2b303b;
+  --color-border: #2e333d;
+  --color-text: #e8eaed;
+  --color-text-muted: #9aa1ad;
+  --color-error: #ff6b6b;
+  --color-warning: #f5b041;
+  --color-backdrop: rgb(0 0 0 / 55%);
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 40%);
+  --shadow-panel: 0 -8px 24px rgb(0 0 0 / 45%);
+  --color-accent: #1db8a0;
+  --color-accent-contrast: #06201c;
+  // Derived from the accent (resolved on <html>, where the accent is set).
+  --color-accent-hover: color-mix(in srgb, var(--color-accent), #fff 18%);
+  --color-focus: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  --color-logo-shock: color-mix(in srgb, var(--color-accent), #fff 62%);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #f4f5f7;
+  --color-surface: #ffffff;
+  --color-surface-raised: #eceef2;
+  --color-surface-hover: #e2e5eb;
+  --color-border: #d5d9e0;
+  --color-text: #1a1d23;
+  --color-text-muted: #5c6370;
+  --color-error: #d93636;
+  --color-warning: #a8650a;
+  --color-backdrop: rgb(0 0 0 / 35%);
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 12%);
+  --shadow-panel: 0 -8px 24px rgb(0 0 0 / 14%);
+  --color-accent-hover: color-mix(in srgb, var(--color-accent), #000 15%);
+  --color-logo-shock: color-mix(in srgb, var(--color-accent), #fff 45%);
+}
+
+// Accent palettes: a color for the dark theme and a deeper one for the light theme, each
+// with the text color used on it. Also used by any element carrying data-accent (the
+// color swatches of the Appearance settings). Add one here and in appearance.ts.
+.accent-palette(@name; @dark; @dark-contrast; @light; @light-contrast) {
+  [data-accent="@{name}"] {
+    --color-accent: @dark;
+    --color-accent-contrast: @dark-contrast;
+  }
+  [data-theme="light"][data-accent="@{name}"],
+  [data-theme="light"] [data-accent="@{name}"] {
+    --color-accent: @light;
+    --color-accent-contrast: @light-contrast;
+  }
+}
+
+.accent-palette(teal; #1db8a0; #06201c; #0e8a77; #ffffff);
+.accent-palette(blue; #4c8dff; #07162e; #2563d9; #ffffff);
+.accent-palette(violet; #a07cff; #170b33; #7048e0; #ffffff);
+.accent-palette(pink; #f062a6; #2e0819; #cc2f7a; #ffffff);
+.accent-palette(orange; #f5973b; #2b1602; #c2620b; #ffffff);
+.accent-palette(green; #52c768; #06200c; #23883a; #ffffff);
+
+// ---------------------------------------------------------------------------
+// Design tokens
+// ---------------------------------------------------------------------------
+
+@color-bg: var(--color-bg);
+@color-surface: var(--color-surface);
+@color-surface-raised: var(--color-surface-raised);
+@color-surface-hover: var(--color-surface-hover);
+@color-border: var(--color-border);
+@color-text: var(--color-text);
+@color-text-muted: var(--color-text-muted);
+@color-accent: var(--color-accent);
+@color-accent-hover: var(--color-accent-hover);
+@color-accent-contrast: var(--color-accent-contrast);
+@color-error: var(--color-error);
+@color-warning: var(--color-warning);
+@color-focus: var(--color-focus);
+@color-backdrop: var(--color-backdrop);
+@color-logo-shock: var(--color-logo-shock); // bright shock front sweeping along the logo's cone
+
+@font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+@font-size-xs: 0.75rem;
+@font-size-sm: 0.8125rem;
+@font-size-base: 0.9375rem;
+@font-size-lg: 1.125rem;
+@font-size-xl: 1.5rem;
+@font-size-xxl: 2.25rem;
+
+@space-1: 4px;
+@space-2: 8px;
+@space-3: 12px;
+@space-4: 16px;
+@space-5: 24px;
+@space-6: 32px;
+
+@radius-sm: 6px;
+@radius-md: 10px;
+@radius-round: 999px;
+
+@topbar-height: 56px;
+@player-height: 88px;
+@sidepanel-width: 240px;
+@album-card-width: 170px;
+@breakpoint-narrow: 760px;
+
+@scrollbar-size: 10px;
+@color-scrollbar-thumb: @color-surface-hover;
+@color-scrollbar-thumb-hover: color-mix(in srgb, @color-text-muted 55%, transparent);
+@color-scrollbar-thumb-active: @color-accent;
+
+@shadow-card: var(--shadow-card);
+@shadow-panel: var(--shadow-panel);
+@queue-height: min(60vh, 560px);
+@transition: 120ms ease;
+
+// ---------------------------------------------------------------------------
+// Base
+// ---------------------------------------------------------------------------
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: @color-bg;
+  color: @color-text;
+  font-family: @font-family;
+  font-size: @font-size-base;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+p,
+dl,
+dd {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+// A link inside text (credits, notes): the accent color, underlined on hover.
+.link {
+  color: @color-accent;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// Scrollbars: thin, dark and rounded, like the rest of the theme. Chrome, Edge and
+// Safari use the ::-webkit-scrollbar rules; Firefox only knows the standard properties
+// (setting those in Chrome would switch its custom scrollbars off, hence @supports).
+::-webkit-scrollbar {
+  width: @scrollbar-size;
+  height: @scrollbar-size;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: @color-scrollbar-thumb;
+  background-clip: padding-box;
+  border: 2px solid transparent; // a gap around the thumb
+  border-radius: @radius-round;
+
+  &:hover {
+    background-color: @color-scrollbar-thumb-hover;
+  }
+
+  &:active {
+    background-color: @color-scrollbar-thumb-active;
+  }
+}
+
+@supports (-moz-appearance: none) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: @color-scrollbar-thumb transparent;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid @color-focus;
+  outline-offset: 2px;
+}
+
+.icon {
+  width: 1.25em;
+  height: 1.25em;
+  flex: none;
+  fill: currentColor;
+}
+
+.text-muted {
+  color: @color-text-muted;
+}
+
+.text-error {
+  color: @color-error;
+}
+
+.splash {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: @color-text-muted;
+}
+
+// ---------------------------------------------------------------------------
+// Controls
+// ---------------------------------------------------------------------------
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: @space-2;
+  padding: @space-2 @space-3;
+  border: 1px solid @color-border;
+  border-radius: @radius-sm;
+  background: @color-surface-raised;
+  color: @color-text;
+  font: inherit;
+  font-size: @font-size-sm;
+  cursor: pointer;
+  transition: background @transition, border-color @transition;
+
+  &:hover:not(:disabled) {
+    background: @color-surface-hover;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  &--primary {
+    border-color: @color-accent;
+    background: @color-accent;
+    color: @color-accent-contrast;
+    font-weight: 600;
+
+    &:hover:not(:disabled) {
+      background: @color-accent-hover;
+    }
+  }
+
+  &--ghost {
+    background: transparent;
+  }
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 @space-2;
+  border: none;
+  border-radius: @radius-round;
+  background: transparent;
+  color: @color-text-muted;
+  font: inherit;
+  cursor: pointer;
+  transition: background @transition, color @transition, transform @transition;
+
+  &:hover:not(:disabled) {
+    background: @color-surface-hover;
+    color: @color-text;
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  &--active {
+    color: @color-accent;
+
+    &:hover:not(:disabled) {
+      color: @color-accent-hover;
+    }
+  }
+
+  &--primary {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: @color-accent;
+    color: @color-accent-contrast;
+
+    .icon {
+      width: 1.5em;
+      height: 1.5em;
+    }
+
+    &:hover:not(:disabled) {
+      background: @color-accent-hover;
+      color: @color-accent-contrast;
+      transform: scale(1.06);
+    }
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: @space-1;
+
+  &--inline {
+    flex-direction: row;
+    align-items: center;
+    gap: @space-3;
+  }
+
+  &__label {
+    color: @color-text-muted;
+    font-size: @font-size-sm;
+  }
+
+  &__input {
+    width: 100%;
+    padding: @space-2 @space-3;
+    border: 1px solid @color-border;
+    border-radius: @radius-sm;
+    background: @color-bg;
+    color: @color-text;
+    font: inherit;
+
+    &:focus {
+      border-color: @color-accent;
+      outline: none;
+    }
+  }
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: @space-2;
+  color: @color-text-muted;
+  font-size: @font-size-sm;
+  cursor: pointer;
+
+  input {
+    accent-color: @color-accent;
+  }
+}
+
+.badge {
+  padding: 2px @space-2;
+  border-radius: @radius-round;
+  background: color-mix(in srgb, @color-accent 18%, transparent);
+  color: @color-accent;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.slider {
+  width: 100%;
+  accent-color: @color-accent;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+}
+
+// Cover art (album covers, artist images) ------------------------------------
+
+.cover {
+  display: block;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: @color-surface-raised;
+
+  &--placeholder {
+    display: grid;
+    place-items: center;
+    color: @color-text-muted;
+
+    .icon {
+      width: 40%;
+      height: 40%;
+    }
+  }
+}
+
+// Brand logo ("Mach play") ---------------------------------------------------
+// Static by default; `--flying` plays the flight once (BrandLogo resets it when
+// the last wake ripple ends). Keep public/logo-flight.svg in sync.
+
+@logo-flight: 1.8s;
+
+.brand-logo {
+  width: 1.75em;
+  height: 1.75em;
+  flex: none;
+
+  &__tile {
+    fill: @color-bg;
+  }
+
+  &__plane {
+    fill: @color-accent;
+    stroke: @color-accent;
+    stroke-width: 3;
+    stroke-linejoin: round;
+  }
+
+  &__cone,
+  &__front,
+  &__air {
+    fill: none;
+    stroke-linecap: round;
+  }
+
+  &__cone {
+    stroke: @color-accent;
+    stroke-width: 4.5;
+    stroke-linejoin: round;
+  }
+
+  &__front {
+    stroke: @color-logo-shock;
+    stroke-width: 4.5;
+    stroke-dasharray: 9 80;
+    opacity: 0;
+  }
+
+  &__air {
+    stroke: @color-accent;
+    stroke-width: 1.8;
+    opacity: 0;
+  }
+
+  &--flying &__front {
+    animation: logo-sweep @logo-flight cubic-bezier(0.4, 0, 0.6, 1);
+  }
+
+  &--flying &__air {
+    animation: logo-wake @logo-flight ease-out;
+
+    &:nth-child(2) {
+      animation-delay: 0.3s;
+    }
+
+    &:nth-child(3) {
+      animation-delay: 0.6s;
+    }
+  }
+
+  &--flying &__plane {
+    animation: logo-buffet @logo-flight ease-in-out;
+  }
+}
+
+@keyframes logo-sweep {
+  0% {
+    stroke-dashoffset: 9;
+    opacity: 0;
+  }
+  10%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -42;
+    opacity: 0;
+  }
+}
+
+@keyframes logo-wake {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(-12px);
+    opacity: 0;
+  }
+}
+
+@keyframes logo-buffet {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  15% {
+    transform: translate(0.6px, -0.4px);
+  }
+  30% {
+    transform: translate(0, 0.3px);
+  }
+  45% {
+    transform: translate(0.3px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-logo--flying * {
+    animation: none !important;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Login
+// ---------------------------------------------------------------------------
+
+.login {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: @space-4;
+
+  &__card {
+    display: flex;
+    flex-direction: column;
+    gap: @space-4;
+    width: 100%;
+    max-width: 360px;
+    padding: @space-6;
+    border: 1px solid @color-border;
+    border-radius: @radius-md;
+    background: @color-surface;
+  }
+
+  &__brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: @space-2;
+    margin-bottom: @space-2;
+    color: @color-accent;
+    font-size: @font-size-xl;
+    font-weight: 700;
+  }
+
+  &__error {
+    color: @color-error;
+    font-size: @font-size-sm;
+  }
+
+  &__submit {
+    justify-content: center;
+    padding: @space-3;
+    font-size: @font-size-base;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Application layout: top bar / (side panel + content) / player bar
+// ---------------------------------------------------------------------------
+
+.app {
+  display: grid;
+  grid-template-rows: @topbar-height minmax(0, 1fr) @player-height;
+  height: 100%;
+
+  &__body {
+    position: relative;
+    display: grid;
+    grid-template-columns: @sidepanel-width minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  &__content {
+    overflow-y: auto;
+    padding: @space-5 @space-6;
+  }
+
+  &__backdrop {
+    display: none;
+  }
+}
+
+// Top bar -------------------------------------------------------------------
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: @space-5;
+  padding: 0 @space-5;
+  border-bottom: 1px solid @color-border;
+  background: @color-surface;
+  // Too narrow for everything: it scrolls sideways instead of squeezing its items.
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+
+  > * {
+    flex-shrink: 0;
+  }
+
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  &__menu {
+    display: none;
+  }
+
+  &__brand {
+    display: flex;
+    align-items: center;
+    gap: @space-2;
+    width: @sidepanel-width - @space-5;
+    color: @color-accent;
+    font-weight: 700;
+  }
+
+  &__nav {
+    display: flex;
+    gap: @space-1;
+  }
+
+  &__link {
+    padding: @space-2 @space-3;
+    border-radius: @radius-sm;
+    color: @color-text-muted;
+    font-weight: 500;
+    transition: color @transition, background @transition;
+
+    &:hover {
+      color: @color-text;
+    }
+
+    &--active {
+      background: @color-surface-raised;
+      color: @color-text;
+    }
+  }
+
+  &__user {
+    display: flex;
+    align-items: center;
+    gap: @space-3;
+    margin-left: auto;
+  }
+
+  // Username + icon, links to the account page.
+  &__account {
+    display: inline-flex;
+    align-items: center;
+    gap: @space-2;
+    padding: @space-2 @space-3;
+    border-radius: @radius-sm;
+    color: @color-text;
+    transition: background @transition, color @transition;
+
+    .icon {
+      color: @color-text-muted;
+    }
+
+    &:hover {
+      background: @color-surface-hover;
+    }
+
+    &--active {
+      background: @color-surface-raised;
+
+      .icon {
+        color: @color-accent;
+      }
+    }
+  }
+
+  &__username {
+    font-weight: 500;
+  }
+}
+
+// Top bar search field (left of the user name).
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: @space-2;
+  width: clamp(140px, 22vw, 280px);
+  padding: 0 @space-3;
+  border: 1px solid @color-border;
+  border-radius: @radius-round;
+  background: @color-surface-raised;
+  color: @color-text-muted;
+  transition: border-color @transition;
+
+  &:focus-within {
+    border-color: @color-accent;
+    color: @color-text;
+  }
+
+  &__input {
+    flex: 1;
+    min-width: 0;
+    padding: @space-2 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: @color-text;
+    font: inherit;
+    font-size: @font-size-sm;
+  }
+}
+
+// Search results page.
+.search {
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: @space-3;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: @font-size-lg;
+  }
+}
+
+.search-artists {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: @space-2;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: @space-3;
+    padding: @space-2;
+    border-radius: @radius-md;
+    background: @color-surface;
+    transition: background @transition;
+
+    &:hover {
+      background: @color-surface-raised;
+    }
+  }
+
+  &__image {
+    width: 48px;
+    height: 48px;
+    border-radius: @radius-round;
+    object-fit: cover;
+  }
+
+  &__name {
+    flex: 1;
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+// Side panel: page links, artist index, letter bar ---------------------------
+
+.sidepanel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  border-right: 1px solid @color-border;
+  background: @color-surface;
+
+  &__pages {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: @space-3;
+    border-bottom: 1px solid @color-border;
+  }
+
+  &__page {
+    display: flex;
+    align-items: center;
+    gap: @space-3;
+    padding: @space-2 @space-3;
+    border-radius: @radius-sm;
+    color: @color-text-muted;
+    transition: background @transition, color @transition;
+
+    &:hover {
+      background: @color-surface-hover;
+      color: @color-text;
+    }
+
+    &--active {
+      background: @color-surface-raised;
+      color: @color-text;
+    }
+  }
+
+  &__artists {
+    overflow-y: auto;
+    padding: @space-2 0 @space-3;
+  }
+
+  &__message {
+    padding: @space-3 @space-4;
+    font-size: @font-size-sm;
+  }
+
+  &__letters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: @space-2 @space-3;
+    border-top: 1px solid @color-border;
+  }
+
+  &__letter {
+    min-width: 22px;
+    padding: 2px @space-1;
+    border: none;
+    border-radius: @radius-sm;
+    background: transparent;
+    color: @color-text-muted;
+    font: inherit;
+    font-size: @font-size-xs;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover {
+      background: @color-surface-hover;
+      color: @color-accent;
+    }
+  }
+}
+
+.side-index {
+  scroll-margin-top: @space-2;
+
+  &__letter {
+    position: sticky;
+    top: 0;
+    padding: @space-1 @space-4;
+    background: @color-surface-raised;
+    color: @color-accent;
+    font-size: @font-size-sm;
+    font-weight: 700;
+  }
+
+  &__list {
+    margin: 0;
+    padding: @space-1 0;
+    list-style: none;
+  }
+
+  &__artist {
+    display: block;
+    overflow: hidden;
+    padding: 3px @space-4;
+    color: @color-text-muted;
+    font-size: @font-size-sm;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover {
+      color: @color-text;
+    }
+
+    &--active {
+      background: color-mix(in srgb, @color-accent 12%, transparent);
+      color: @color-accent;
+    }
+  }
+}
+
+// Pages ---------------------------------------------------------------------
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: @space-5;
+  max-width: 1400px;
+
+  &__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: @space-3;
+  }
+
+  &__title {
+    font-size: @font-size-xl;
+    font-weight: 700;
+  }
+
+  &__tools {
+    display: flex;
+    align-items: center;
+    gap: @space-3;
+    margin-left: auto;
+  }
+
+  &__search {
+    width: 220px;
+  }
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: @space-2;
+  padding: @space-6;
+  border: 1px dashed @color-border;
+  border-radius: @radius-md;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: @space-2;
+  padding: @space-5;
+  border: 1px solid @color-border;
+  border-radius: @radius-md;
+  background: @color-surface;
+
+  &--placeholder {
+    border-style: dashed;
+    background: transparent;
+  }
+
+  &__title {
+    font-size: @font-size-lg;
+  }
+}
+
+// Browse: artist index -------------------------------------------------------
+
+.browse__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: @space-5;
+}
+
+.browse__groups {
+  display: flex;
+  flex-direction: column;
+  gap: @space-5;
+}
+
+.index-group {
+  scroll-margin-top: @space-3;
+
+  &__letter {
+    margin-bottom: @space-2;
+    font-size: @font-size-xxl;
+    font-weight: 300;
+    line-height: 1.1;
+  }
+
+  &__artists {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: @space-2 @space-4;
+    margin: 0;
+    padding: 0 0 0 @space-4;
+    list-style: none;
+  }
+
+  &__artist {
+    display: block;
+    overflow: hidden;
+    color: @color-text;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover {
+      color: @color-accent;
+    }
+  }
+}
+
+.letter-rail {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  gap: 1px;
+
+  &__letter {
+    padding: 1px @space-2;
+    border-radius: @radius-sm;
+    color: @color-text-muted;
+    font-size: @font-size-sm;
+    text-align: center;
+
+    &:hover {
+      background: @color-surface-raised;
+      color: @color-accent;
+    }
+  }
+}
+
+// Artist page ---------------------------------------------------------------
+
+.artist-header {
+  display: flex;
+  align-items: center;
+  gap: @space-4;
+
+  &__image {
+    width: 72px;
+    height: 72px;
+    border: 2px solid @color-border;
+    border-radius: @radius-round;
+    object-fit: cover;
+
+    // A real picture of the artist (external source): shown larger.
+    &--picture {
+      width: 128px;
+      height: 128px;
+    }
+  }
+
+  &__name {
+    font-size: @font-size-xl;
+    font-weight: 600;
+  }
+}
+
+// Artist information (Last.fm): biography, similar artists, credits.
+.panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: @space-3;
+}
+
+.biography {
+  display: flex;
+  flex-direction: column;
+  gap: @space-2;
+  max-width: 80ch;
+  line-height: 1.6;
+
+  &__more {
+    align-self: flex-start;
+  }
+}
+
+.similar {
+  display: flex;
+  flex-direction: column;
+  gap: @space-2;
+  margin-top: @space-2;
+
+  &__title {
+    margin: 0;
+    color: @color-text-muted;
+    font-size: @font-size-sm;
+    font-weight: 600;
+  }
+
+  &__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: @space-2;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+}
+
+.chip {
+  display: inline-block;
+  padding: 2px @space-3;
+  border: 1px solid @color-border;
+  border-radius: @radius-round;
+  color: @color-text-muted;
+  font-size: @font-size-sm;
+
+  &--link {
+    border-color: color-mix(in srgb, @color-accent 45%, transparent);
+    color: @color-text;
+    transition: background @transition;
+
+    &:hover {
+      background: color-mix(in srgb, @color-accent 16%, transparent);
+    }
+  }
+}
+
+.credit {
+  margin-top: @space-2;
+  color: @color-text-muted;
+  font-size: @font-size-xs;
+}
+
+// A round, grey, see-through button over a picture (album cards, album cover).
+.overlay-button() {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: @radius-round;
+  background: rgb(90 94 102 / 62%); // grey, see-through: visible on dark and light covers
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 35%);
+  backdrop-filter: blur(3px);
+  transition: background @transition, color @transition, transform @transition;
+
+  &:hover:not(:disabled) {
+    background: rgb(70 74 82 / 85%);
+    color: @color-accent;
+    transform: scale(1.06);
+  }
+
+  &:disabled {
+    cursor: progress;
+  }
+}
+
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(@album-card-width, 1fr));
+  gap: @space-4;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.album-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: @radius-sm;
+  background: @color-surface;
+  box-shadow: @shadow-card;
+  transition: transform @transition, background @transition;
+
+  &:hover {
+    background: @color-surface-raised;
+    transform: translateY(-2px);
+  }
+
+  &__link {
+    display: flex;
+    flex-direction: column;
+  }
+
+  // Play / add buttons over the top-left of the cover, shown on hover (and keyboard
+  // focus; always on touch screens, which have no hover).
+  &__actions {
+    position: absolute;
+    top: @space-2;
+    left: @space-2;
+    display: flex;
+    gap: @space-1;
+    opacity: 0;
+    transition: opacity @transition;
+  }
+
+  &:hover &__actions,
+  &:focus-within &__actions {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    &__actions {
+      opacity: 1;
+    }
+  }
+
+  &__action {
+    .overlay-button();
+  }
+
+  &__action--done,
+  &__action--done:hover:not(:disabled) {
+    background: @color-accent;
+    color: @color-accent-contrast;
+  }
+
+  &__cover {
+    width: 100%;
+  }
+
+  &__name,
+  &__info {
+    overflow: hidden;
+    padding: 0 @space-2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__name {
+    padding-top: @space-2;
+    font-size: @font-size-sm;
+  }
+
+  &__info {
+    padding-bottom: @space-2;
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+  }
+}
+
+// Album page ----------------------------------------------------------------
+
+.album-header {
+  display: flex;
+  align-items: center;
+  gap: @space-4;
+
+  &__artist-image {
+    width: 64px;
+    height: 64px;
+    flex: none;
+    border: 2px solid @color-border;
+    border-radius: @radius-round;
+  }
+
+  &__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__artist {
+    color: @color-text-muted;
+    font-size: @font-size-sm;
+
+    &:hover {
+      color: @color-accent;
+    }
+  }
+
+  &__title-row {
+    display: flex;
+    align-items: center;
+    gap: @space-4;
+  }
+
+  &__title {
+    font-size: @font-size-xl;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  &__play {
+    flex: none;
+  }
+
+  &__facts {
+    color: @color-text-muted;
+    font-size: @font-size-sm;
+  }
+}
+
+// Text-style actions separated by bars (Shuffle | Add to queue | ...).
+// Tag editor (admins).
+.tag-editor {
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: @space-4;
+  }
+
+  &__album {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: @space-3;
+    align-items: end;
+  }
+
+  &__compilation {
+    align-self: center;
+  }
+
+  &__tracks-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: @space-3;
+  }
+
+  &__tracks {
+    .field__input {
+      width: 100%;
+    }
+  }
+
+  &__number {
+    width: 64px;
+  }
+
+  &__file {
+    max-width: 220px;
+    overflow: hidden;
+    font-size: @font-size-xs;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+// "Add to playlist" / "Save as playlist" menu.
+.playlist-menu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+
+  &__panel {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + @space-1);
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 240px;
+    max-height: 320px;
+    padding: @space-2;
+    overflow-y: auto;
+    border: 1px solid @color-border;
+    border-radius: @radius-md;
+    background: @color-surface-raised;
+    box-shadow: @shadow-panel;
+  }
+
+  &__hint {
+    margin: 0 0 @space-1;
+    font-size: @font-size-xs;
+  }
+
+  &__item {
+    display: flex;
+    justify-content: space-between;
+    gap: @space-3;
+    padding: @space-2;
+    border: 0;
+    border-radius: @radius-sm;
+    background: transparent;
+    color: @color-text;
+    font: inherit;
+    font-size: @font-size-sm;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: @color-surface-hover;
+    }
+  }
+
+  &__new {
+    display: flex;
+    gap: @space-2;
+    margin-top: @space-1;
+    padding-top: @space-2;
+    border-top: 1px solid @color-border;
+
+    .field__input {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+
+  &__message {
+    margin-left: @space-2;
+    color: @color-accent;
+    font-size: @font-size-xs;
+  }
+}
+
+.playlists {
+  &__new {
+    display: flex;
+    gap: @space-2;
+    margin-left: auto;
+  }
+
+  &__title {
+    margin: @space-3 0 0;
+    font-size: @font-size-lg;
+  }
+}
+
+.playlist {
+  &__cover {
+    border-radius: @radius-sm;
+  }
+
+  &__rename {
+    display: flex;
+    gap: @space-2;
+  }
+
+  &__badge {
+    margin-left: @space-2;
+  }
+}
+
+// "2 tracks" next to the album actions: they only take the ticked tracks.
+.selection-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: @space-1;
+  margin-left: @space-3;
+  padding: 1px @space-1 1px @space-3;
+  border-radius: @radius-round;
+  background: color-mix(in srgb, @color-accent 18%, transparent);
+  color: @color-accent;
+  font-size: @font-size-xs;
+  font-weight: 600;
+
+  &__clear {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: @radius-round;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+
+    &:hover {
+      background: color-mix(in srgb, @color-accent 25%, transparent);
+    }
+  }
+}
+
+.action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+
+  &__item {
+    display: inline-flex;
+    align-items: center;
+    gap: @space-2;
+    padding: @space-1 @space-3;
+    border: none;
+    border-left: 1px solid @color-border;
+    background: transparent;
+    color: @color-text-muted;
+    font: inherit;
+    font-size: @font-size-xs;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+
+    &:first-child {
+      padding-left: 0;
+      border-left: none;
+    }
+
+    &:hover:not(:disabled) {
+      color: @color-accent;
+    }
+
+    &--active {
+      color: @color-accent;
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+}
+
+.album__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: @space-5;
+}
+
+.album__cover {
+  width: 100%;
+  border-radius: @radius-sm;
+  box-shadow: @shadow-card;
+}
+
+// The cover on the album page, with the "choose another cover" pen (admins) on hover.
+.album__cover-box {
+  position: relative;
+  align-self: start;
+
+  &:hover .album__cover-edit,
+  &:focus-within .album__cover-edit {
+    opacity: 1;
+  }
+}
+
+.album__cover-edit {
+  .overlay-button();
+  position: absolute;
+  top: @space-2;
+  left: @space-2;
+  opacity: 0;
+  transition: opacity @transition, background @transition, color @transition, transform @transition;
+
+  @media (hover: none) {
+    opacity: 1;
+  }
+}
+
+// About box: the text, and the artist picture (external source) on the right.
+.about-body {
+  display: flex;
+  align-items: flex-start;
+  gap: @space-5;
+
+  &__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: @space-2;
+    min-width: 0;
+  }
+
+  @media (max-width: @breakpoint-narrow) {
+    flex-direction: column-reverse;
+  }
+}
+
+.artist-picture {
+  flex: 0 0 min(280px, 40%);
+  margin: 0;
+
+  &__image {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: @radius-md;
+    box-shadow: @shadow-card;
+    object-fit: cover;
+  }
+
+  .credit {
+    text-align: right;
+  }
+}
+
+// Album cover picker (admins).
+.cover-picker {
+  &__compare {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: @space-5;
+  }
+
+  &__figure {
+    display: flex;
+    flex-direction: column;
+    gap: @space-1;
+    margin: 0;
+    text-align: center;
+  }
+
+  &__image {
+    width: 220px;
+    height: 220px;
+    border-radius: @radius-sm;
+    box-shadow: @shadow-card;
+    object-fit: cover;
+  }
+
+  &__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed @color-border;
+    color: @color-text-muted;
+    box-shadow: none;
+  }
+
+  &__apply {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: @space-2;
+    max-width: 320px;
+  }
+
+  &__search {
+    display: flex;
+    gap: @space-2;
+    max-width: 640px;
+
+    .field__input {
+      flex: 1;
+    }
+  }
+}
+
+.cover-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: @space-3;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  &__item {
+    display: flex;
+    flex-direction: column;
+    gap: @space-1;
+    width: 100%;
+    padding: @space-2;
+    border: 2px solid transparent;
+    border-radius: @radius-md;
+    background: @color-surface;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color @transition, background @transition;
+
+    &:hover {
+      background: @color-surface-raised;
+    }
+
+    &--selected {
+      border-color: @color-accent;
+    }
+  }
+
+  &__image {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: @radius-sm;
+    object-fit: cover;
+  }
+
+  &__title,
+  &__info {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__title {
+    font-size: @font-size-sm;
+  }
+
+  &__info {
+    font-size: @font-size-xs;
+  }
+}
+
+.tracks {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: @font-size-sm;
+
+  th {
+    padding: @space-2;
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+    font-weight: 600;
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  td {
+    padding: @space-1 @space-2;
+  }
+
+  tbody tr:nth-child(odd):not(.tracks__disc) {
+    background: color-mix(in srgb, @color-surface 70%, transparent);
+  }
+
+  &__disc td {
+    padding-top: @space-4;
+    color: @color-text-muted;
+    font-weight: 600;
+  }
+
+  &__row {
+    &:hover {
+      background: @color-surface-raised !important;
+    }
+
+    &--current {
+      color: @color-accent;
+
+      .tracks__artist-column {
+        color: @color-accent;
+      }
+    }
+  }
+
+  &__actions {
+    width: 100px;
+    white-space: nowrap;
+  }
+
+  &__action {
+    min-width: 28px;
+    height: 28px;
+    padding: 0;
+
+    .icon {
+      width: 1em;
+      height: 1em;
+    }
+  }
+
+  &__select {
+    width: 28px;
+
+    input {
+      accent-color: @color-accent;
+    }
+  }
+
+  &__number {
+    width: 36px;
+    color: @color-text-muted;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  th&__number {
+    text-align: right;
+  }
+
+  &__title {
+    font-style: italic;
+  }
+
+  &__artist-column {
+    width: 30%;
+    color: @color-text-muted;
+  }
+
+  &__duration {
+    width: 56px;
+    color: @color-text-muted;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  th&__duration {
+    text-align: right;
+  }
+}
+
+// Settings / About -----------------------------------------------------------
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: @space-3;
+  max-width: 640px;
+  padding: @space-5;
+  border: 1px solid @color-border;
+  border-radius: @radius-md;
+  background: @color-surface;
+
+  &--wide {
+    max-width: 900px;
+  }
+
+  &__title {
+    font-size: @font-size-lg;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: @space-2;
+  }
+
+  &__slider {
+    max-width: 220px;
+  }
+
+  &__value {
+    min-width: 36px;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.text-success {
+  color: @color-accent;
+}
+
+.button--danger {
+  color: @color-error;
+
+  &:hover:not(:disabled) {
+    border-color: @color-error;
+  }
+}
+
+select.field__input {
+  cursor: pointer;
+}
+
+// Forms: fields side by side, wrapping on narrow screens.
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  align-items: end;
+  gap: @space-3;
+
+  &--inline {
+    padding-top: @space-3;
+    border-top: 1px solid @color-border;
+  }
+
+  &__actions {
+    display: flex;
+    gap: @space-2;
+  }
+}
+
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th {
+    padding: @space-2;
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+    font-weight: 600;
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  td {
+    padding: @space-2;
+    border-top: 1px solid @color-border;
+  }
+
+  &__role {
+    width: auto;
+  }
+
+  &__actions {
+    text-align: right;
+
+    .button + .button {
+      margin-left: @space-2;
+    }
+  }
+
+  &__reset {
+    display: inline-flex;
+    gap: @space-2;
+
+    .field__input {
+      width: 180px;
+    }
+  }
+}
+
+// Manage Library, "Library" tab ---------------------------------------------
+
+.library-status {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: @space-2 @space-4;
+
+  dt {
+    color: @color-text-muted;
+  }
+
+  code {
+    font-size: @font-size-sm;
+    word-break: break-all;
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: @space-3;
+  }
+
+  &__buttons {
+    display: flex;
+    gap: @space-2;
+  }
+
+  &__issue {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: @space-3;
+    padding: @space-3;
+    border-radius: @radius-sm;
+    background: color-mix(in srgb, @color-warning 14%, transparent);
+  }
+
+  &__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: @space-2;
+
+    .field__input {
+      flex: 1 1 220px;
+    }
+  }
+}
+
+.meter {
+  height: 6px;
+  margin-top: @space-2;
+  overflow: hidden;
+  border-radius: @radius-round;
+  background: @color-surface-raised;
+
+  &__fill {
+    height: 100%;
+    border-radius: inherit;
+    background: @color-accent;
+  }
+}
+
+.unknown-folders {
+  max-height: 60vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid @color-border;
+  border-radius: @radius-sm;
+
+  li + li {
+    border-top: 1px solid @color-border;
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "check name count"
+      "check path count";
+    align-items: center;
+    gap: 0 @space-3;
+    padding: @space-2 @space-3;
+    cursor: pointer;
+
+    &:hover {
+      background: @color-surface-hover;
+    }
+
+    input {
+      grid-area: check;
+    }
+  }
+
+  &__name {
+    grid-area: name;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__path {
+    grid-area: path;
+    overflow: hidden;
+    font-size: @font-size-xs;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__count {
+    grid-area: count;
+    font-size: @font-size-sm;
+  }
+}
+
+// Theme choice (Account page): a segmented control and color swatches.
+.segmented {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 3px;
+  border: 1px solid @color-border;
+  border-radius: @radius-sm;
+  background: @color-surface-raised;
+
+  &__option {
+    padding: @space-1 @space-4;
+    border: 0;
+    border-radius: calc(@radius-sm - 2px);
+    background: transparent;
+    color: @color-text-muted;
+    font: inherit;
+    font-size: @font-size-sm;
+    cursor: pointer;
+    transition: background @transition, color @transition;
+
+    &:hover {
+      color: @color-text;
+    }
+
+    &--active,
+    &--active:hover {
+      background: @color-accent;
+      color: @color-accent-contrast;
+    }
+  }
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: @space-3;
+}
+
+// Each swatch carries data-accent: its --color-accent is that palette (theme.less top).
+.swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: @radius-round;
+  background: @color-accent content-box;
+  box-shadow: 0 0 0 1px @color-border;
+  cursor: pointer;
+  transition: transform @transition, border-color @transition;
+
+  &:hover {
+    transform: scale(1.08);
+  }
+
+  &--active {
+    padding: 3px; // the selected one: a ring around the color
+    border-color: @color-accent;
+    box-shadow: none;
+  }
+}
+
+.folder-form {
+  display: flex;
+  flex-direction: column;
+  gap: @space-2;
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: @space-2;
+
+    > .icon {
+      color: @color-text-muted;
+    }
+  }
+}
+
+.scan-panel {
+  display: flex;
+  flex-direction: column;
+  gap: @space-3;
+  padding-top: @space-3;
+  border-top: 1px solid @color-border;
+
+  &__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: @space-3;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: @font-size-base;
+  }
+}
+
+.scan-progress {
+  display: flex;
+  flex-direction: column;
+  gap: @space-2;
+  font-size: @font-size-sm;
+
+  &__status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: @space-3;
+  }
+
+  &--running &__status strong {
+    color: @color-accent;
+  }
+}
+
+.progress {
+  overflow: hidden;
+  height: 6px;
+  border-radius: @radius-round;
+  background: @color-surface-raised;
+
+  &__bar {
+    height: 100%;
+    border-radius: inherit;
+    background: @color-accent;
+    transition: width 400ms ease;
+  }
+
+  // Unknown total (listing folders, finishing): a sliding segment.
+  &--indeterminate &__bar {
+    width: 30%;
+    animation: progress-slide 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(340%);
+  }
+}
+
+.schedule-form {
+  display: flex;
+  flex-direction: column;
+  gap: @space-3;
+
+  &__time {
+    width: auto;
+    padding: @space-1 @space-2;
+  }
+}
+
+.about {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: @space-2 @space-5;
+
+  dt {
+    color: @color-text-muted;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Manage Library: tabs, folder browser, imports, review, deletion
+// ---------------------------------------------------------------------------
+
+.notice {
+  padding: @space-3 @space-4;
+  border: 1px solid color-mix(in srgb, @color-accent 40%, transparent);
+  border-radius: @radius-sm;
+  background: color-mix(in srgb, @color-accent 8%, transparent);
+  font-size: @font-size-sm;
+}
+
+.tabs {
+  display: flex;
+  gap: @space-1;
+  border-bottom: 1px solid @color-border;
+
+  &__tab {
+    padding: @space-2 @space-4;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: @color-text-muted;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+
+    &:hover {
+      color: @color-text;
+    }
+
+    &--active {
+      border-bottom-color: @color-accent;
+      color: @color-text;
+    }
+  }
+}
+
+.path-list {
+  display: flex;
+  flex-direction: column;
+  gap: @space-1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: @space-2;
+
+    > .icon {
+      color: @color-text-muted;
+    }
+  }
+
+  &__path {
+    font-family: ui-monospace, monospace;
+    font-size: @font-size-sm;
+  }
+}
+
+.browser {
+  display: flex;
+  flex-direction: column;
+  max-height: 420px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  border: 1px solid @color-border;
+  border-radius: @radius-sm;
+  list-style: none;
+
+  &__location,
+  &__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: @space-2;
+  }
+
+  &__header .settings-section__title {
+    margin-right: @space-2;
+  }
+
+  &__path {
+    overflow: hidden;
+    font-family: ui-monospace, monospace;
+    font-size: @font-size-sm;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__entry {
+    display: flex;
+    align-items: center;
+    gap: @space-3;
+    padding: @space-1 @space-3;
+    border-top: 1px solid @color-border;
+    font-size: @font-size-sm;
+
+    &:first-child {
+      border-top: none;
+    }
+
+    input {
+      accent-color: @color-accent;
+    }
+
+    &--file {
+      color: @color-text-muted;
+    }
+  }
+
+  // A folder name that opens the folder (also used by the delete list).
+  &__open {
+    display: inline-flex;
+    flex: 1;
+    align-items: center;
+    gap: @space-2;
+    min-width: 0;
+    padding: @space-1 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      color: @color-accent;
+    }
+  }
+}
+
+.job-list {
+  display: flex;
+  flex-direction: column;
+  gap: @space-2;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  &__job {
+    display: flex;
+    flex-direction: column;
+    gap: @space-1;
+    padding: @space-3;
+    border: 1px solid @color-border;
+    border-radius: @radius-sm;
+  }
+
+  &__header,
+  &__counts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: @space-2;
+    font-size: @font-size-sm;
+  }
+
+  &__sources {
+    overflow: hidden;
+    font-family: ui-monospace, monospace;
+    font-size: @font-size-xs;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+// Import job / task statuses.
+.status {
+  padding: 1px @space-2;
+  border-radius: @radius-round;
+  background: @color-surface-raised;
+  color: @color-text-muted;
+  font-size: @font-size-xs;
+  font-weight: 600;
+
+  &--imported,
+  &--done {
+    background: color-mix(in srgb, @color-accent 16%, transparent);
+    color: @color-accent;
+  }
+
+  &--pending {
+    background: color-mix(in srgb, @color-warning 18%, transparent);
+    color: @color-warning;
+  }
+
+  &--failed {
+    background: color-mix(in srgb, @color-error 16%, transparent);
+    color: @color-error;
+  }
+
+  &--queued,
+  &--analyzing,
+  &--applying,
+  &--running {
+    color: @color-text;
+  }
+}
+
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: @space-4;
+  max-width: 1000px;
+}
+
+.review-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: @space-3;
+  padding: @space-4 @space-5;
+  border: 1px solid @color-border;
+  border-radius: @radius-md;
+  background: @color-surface;
+
+  > table,
+  > .form-grid {
+    align-self: stretch;
+  }
+
+  &__header {
+    display: flex;
+    align-self: stretch;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: @space-3;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: @font-size-base;
+  }
+
+  &__tags {
+    font-size: @font-size-sm;
+  }
+}
+
+.candidates {
+  font-size: @font-size-sm;
+
+  tbody tr {
+    cursor: pointer;
+
+    &:hover {
+      background: @color-surface-raised;
+    }
+  }
+
+  &__row--selected {
+    background: color-mix(in srgb, @color-accent 10%, transparent);
+  }
+
+  a:hover {
+    color: @color-accent;
+  }
+}
+
+.match {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+
+  &--high {
+    color: @color-accent;
+  }
+
+  &--mid {
+    color: @color-warning;
+  }
+
+  &--low {
+    color: @color-error;
+  }
+}
+
+.track-compare--changed {
+  color: @color-warning;
+}
+
+.track-compare__issues {
+  color: @color-warning;
+  font-size: @font-size-xs;
+}
+
+// Review: bulk actions above the list.
+.review-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: @space-3;
+  padding: @space-3 @space-4;
+  border: 1px solid @color-border;
+  border-radius: @radius-md;
+  background: @color-surface;
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: @space-2;
+  }
+
+  p {
+    flex-basis: 100%;
+  }
+}
+
+// Review: why a candidate is not a 100 % match.
+.match-details {
+  padding: @space-3 @space-4;
+  border-radius: @radius-sm;
+  background: @color-surface-raised;
+
+  &--perfect {
+    color: @color-text-muted;
+  }
+
+  &__title {
+    margin: 0 0 @space-2;
+    font-size: @font-size-sm;
+    font-weight: 600;
+  }
+
+  &__list {
+    display: grid;
+    grid-template-columns: max-content max-content minmax(0, 1fr);
+    gap: @space-1 @space-3;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: @font-size-sm;
+  }
+
+  &__item {
+    display: contents;
+  }
+
+  &__points {
+    color: @color-warning;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  &__label {
+    font-weight: 600;
+  }
+
+  &__values {
+    overflow-wrap: anywhere;
+  }
+
+  &__current {
+    color: @color-text-muted;
+    text-decoration: line-through;
+  }
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: @color-accent;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.delete-list {
+  display: flex;
+  flex-direction: column;
+  gap: @space-1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  &__album {
+    border-bottom: 1px solid @color-border;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: @space-3;
+    padding: @space-1 0;
+    font-size: @font-size-sm;
+
+    input {
+      accent-color: @color-error;
+    }
+
+    .browser__open {
+      flex-wrap: wrap;
+      gap: @space-3;
+    }
+  }
+
+  &__cover {
+    width: 40px;
+    flex: none;
+    border-radius: @radius-sm;
+  }
+
+  &__songs {
+    margin: 0 0 @space-2;
+    padding: 0 0 0 @space-6;
+    list-style: none;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Player dock: queue panel sliding up above the player bar
+// ---------------------------------------------------------------------------
+
+.player-dock {
+  position: relative;
+  z-index: 4;
+  display: grid;
+}
+
+// The area above the player bar the queue slides into: it clips the queue while it
+// is (partly) below that line, so it seems to come out of the player bar. Room is left
+// above for the queue's shadow.
+@queue-shadow-room: 24px;
+
+.queue-slot {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: calc(@queue-height + @queue-shadow-room);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.queue {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: @queue-height;
+  border-top: 1px solid @color-border;
+  background: @color-surface;
+  box-shadow: @shadow-panel;
+  pointer-events: none;
+  transform: translateY(100%);
+  visibility: hidden;
+  // Closing: slide down, then hide (a transition reverses from where it is, so leaving
+  // mid-opening retracts smoothly).
+  transition: transform 280ms cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 280ms;
+
+  &--open {
+    pointer-events: auto;
+    transform: none;
+    visibility: visible;
+    transition: transform 280ms cubic-bezier(0.2, 0, 0, 1), visibility 0s;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &,
+    &--open {
+      transition: none;
+    }
+  }
+
+  &__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: @space-4;
+    padding: @space-3 @space-5;
+    border-bottom: 1px solid @color-border;
+  }
+
+  &__title {
+    font-size: @font-size-lg;
+    font-weight: 400;
+  }
+
+  &__summary {
+    margin-left: auto;
+    color: @color-text-muted;
+    font-size: @font-size-sm;
+  }
+
+  &__body {
+    overflow-y: auto;
+    padding: 0 @space-3 @space-3;
+  }
+
+  &__tracks thead th {
+    position: sticky;
+    z-index: 1;
+    top: 0;
+    background: @color-surface;
+  }
+
+  &__empty {
+    padding: @space-5;
+  }
+
+  &__row {
+    cursor: grab;
+
+    &--dragging {
+      opacity: 0.4;
+    }
+
+    &--drop-before td {
+      box-shadow: inset 0 2px 0 @color-accent;
+    }
+
+    &--drop-after td {
+      box-shadow: inset 0 -2px 0 @color-accent;
+    }
+  }
+
+  // Only the remove button: keeps the checkbox close to it.
+  &__col-remove {
+    width: 32px;
+  }
+
+  &__play {
+    display: inline-flex;
+    align-items: center;
+    gap: @space-2;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    .icon {
+      width: 1em;
+      height: 1em;
+    }
+
+    &:hover {
+      color: @color-accent;
+    }
+  }
+
+  a:hover {
+    color: @color-accent;
+  }
+
+  &__col-year,
+  &__col-format,
+  &__col-size,
+  &__col-bitrate {
+    color: @color-text-muted;
+    white-space: nowrap;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Player bar: seek line on top, then track | controls | time + volume
+// ---------------------------------------------------------------------------
+
+.player {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: @space-5;
+  padding: 0 @space-5;
+  border-top: 1px solid @color-border;
+  background: @color-surface;
+
+  // Thin progress line spanning the whole bar; thicker while hovered.
+  &__seek {
+    position: absolute;
+    top: -3px;
+    left: 0;
+    width: 100%;
+    height: 6px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+    appearance: none;
+
+    &::-webkit-slider-runnable-track {
+      height: 3px;
+      background: linear-gradient(to right, @color-accent var(--progress), @color-border var(--progress));
+      transition: height @transition;
+    }
+
+    &::-moz-range-track {
+      height: 3px;
+      background: linear-gradient(to right, @color-accent var(--progress), @color-border var(--progress));
+    }
+
+    &::-webkit-slider-thumb {
+      width: 12px;
+      height: 12px;
+      margin-top: -4.5px;
+      border-radius: @radius-round;
+      background: @color-accent;
+      opacity: 0;
+      appearance: none;
+    }
+
+    &::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      border: none;
+      border-radius: @radius-round;
+      background: @color-accent;
+      opacity: 0;
+    }
+
+    &:hover:not(:disabled)::-webkit-slider-thumb,
+    &:focus-visible::-webkit-slider-thumb,
+    &:hover:not(:disabled)::-moz-range-thumb {
+      opacity: 1;
+    }
+
+    &:disabled {
+      cursor: default;
+    }
+  }
+
+  &__track {
+    display: flex;
+    align-items: center;
+    gap: @space-3;
+    min-width: 0;
+  }
+
+  &__cover {
+    width: 60px;
+    flex: none;
+    border-radius: @radius-sm;
+  }
+
+  &__meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__title,
+  &__artist {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    a:hover {
+      color: @color-accent;
+    }
+  }
+
+  &__title {
+    font-weight: 600;
+  }
+
+  &__artist {
+    color: @color-text-muted;
+    font-size: @font-size-sm;
+  }
+
+  &__controls {
+    display: flex;
+    align-items: center;
+    gap: @space-2;
+  }
+
+  &__right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: @space-3;
+  }
+
+  &__crossfade-seconds {
+    font-size: @font-size-xs;
+    font-weight: 600;
+  }
+
+  &__time {
+    color: @color-text-muted;
+    font-size: @font-size-sm;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  &__volume {
+    display: flex;
+    align-items: center;
+    gap: @space-1;
+
+    .slider {
+      width: 110px;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Narrow screens: side panel as a drawer, compact player
+// ---------------------------------------------------------------------------
+
+@media (max-width: @breakpoint-narrow) {
+  .app__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app__content {
+    padding: @space-4;
+  }
+
+  .sidepanel {
+    position: absolute;
+    z-index: 3;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(@sidepanel-width + 40px, 85vw);
+    transform: translateX(-100%);
+    transition: transform 180ms ease;
+  }
+
+  .app--panel-open {
+    .sidepanel {
+      transform: none;
+    }
+
+    .app__backdrop {
+      position: absolute;
+      z-index: 2;
+      inset: 0;
+      display: block;
+      background: @color-backdrop;
+    }
+  }
+
+  .topbar {
+    gap: @space-2;
+    padding: 0 @space-2;
+
+    &__menu {
+      display: inline-flex;
+    }
+
+    &__brand {
+      width: auto;
+
+      span {
+        display: none;
+      }
+    }
+
+    &__link {
+      padding: @space-2;
+    }
+
+    &__username,
+    &__user .badge {
+      display: none;
+    }
+  }
+
+  .player {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: @space-2;
+    padding: 0 @space-3;
+
+    // Keep play / next and the queue button (the only way to open the queue on touch).
+    &__right > :not(.player__queue),
+    &__controls .icon-button:not(.icon-button--primary):not([aria-label="Next"]) {
+      display: none;
+    }
+
+    &__cover {
+      width: 48px;
+    }
+  }
+
+  .album__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .album__cover-box {
+    display: none;
+  }
+
+  .browse__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .letter-rail {
+    display: none;
+  }
+
+  .page__tools {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .page__search {
+    flex: 1;
+  }
+
+  .tracks__select,
+  .tracks__artist-column {
+    display: none;
+  }
+
+  .queue {
+    height: calc(100vh - @topbar-height - @player-height);
+
+    &__header {
+      gap: @space-2;
+      padding: @space-2 @space-3;
+    }
+
+    &__tracks th:nth-child(n + 4):not(.tracks__duration),
+    &__tracks td:nth-child(n + 4):not(.tracks__duration) {
+      display: none;
+    }
+  }
+}
