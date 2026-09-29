@@ -2,13 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: full screen on phones (home-screen app); theme.less keeps clear
+         of the notch and the home bar with the safe-area insets. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Sound-Barrier</title>
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <meta name="theme-color" content="#121418" />
+    <!-- The browser's / status bar's colour: the top bar's (src/theme/appearance.ts follows the theme). -->
+    <meta name="theme-color" content="#1a1d23" />
+    <!-- Added to an iPhone's home screen: its name, full screen. The status bar stays iOS'
+         ("default", coloured by theme-color), the page below it: with "black-translucent"
+         (the page under the status bar), iOS 26 still sizes the page as if the status bar
+         took room, leaving a band of its height at the bottom. -->
+    <meta name="apple-mobile-web-app-title" content="Sound Barrier" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <script>
       // Theme remembered by src/theme/appearance.ts (same key and format), applied before
       // the page is drawn; the preferences from the server replace it once signed in.
@@ -23,6 +34,8 @@
         } catch (e) {}
         document.documentElement.dataset.theme = theme;
         document.documentElement.dataset.accent = accent;
+        // The top bar's colour (theme.less --color-surface), for the status bar.
+        document.querySelector('meta[name="theme-color"]').setAttribute("content", theme === "light" ? "#ffffff" : "#1a1d23");
       })();
     </script>
   </head>

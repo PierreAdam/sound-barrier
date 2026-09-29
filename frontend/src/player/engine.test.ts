@@ -274,6 +274,68 @@ describe("audiobooks and podcasts", () => {
     expect(chapterIndex(undefined, 10)).toBe(-1);
   });
 
+  it("pauses at the end of the chapter, at the next one's start, once", () => {
+    const { engine, decks, tick } = setup();
+    engine.playQueue(book, 0);
+    const deck = decks[0] as FakeAudio;
+    deck.advance(10);
+    engine.setPauseAtEnd(true);
+    expect(engine.getSnapshot().pauseAtEnd).toBe(true);
+
+    deck.advance(58); // "One" ends at 60: not yet timed
+    tick(1000);
+    expect(deck.paused).toBe(false);
+    deck.advance(59); // within 1.5 s: the stop is timed
+    tick(999);
+    expect(deck.paused).toBe(false);
+    tick(1);
+    expect(deck.paused).toBe(true);
+    expect(deck.currentTime).toBe(60); // "Two" starts when played again
+    expect(engine.getSnapshot().pauseAtEnd).toBe(false);
+
+    void deck.play(); // off now: plays through
+    deck.advance(119);
+    tick(2000);
+    expect(deck.paused).toBe(false);
+  });
+
+  it("pauses at the end of the chapter reached, not of the one it was turned on in", () => {
+    const { engine, decks, tick } = setup();
+    engine.playQueue(book, 0);
+    const deck = decks[0] as FakeAudio;
+    deck.advance(10);
+    engine.setPauseAtEnd(true);
+    engine.next(); // "Two" (a seek to 60)
+    deck.advance(60.2);
+    tick(2000);
+    expect(deck.paused).toBe(false); // not stopped at the start of "Two"
+    deck.advance(119);
+    tick(1000);
+    expect(deck.paused).toBe(true);
+    expect(deck.currentTime).toBe(120);
+  });
+
+  it("at the end of a file, pauses on the next file", () => {
+    const { engine, decks } = setup();
+    engine.playQueue(book, 0);
+    const deck = decks[0] as FakeAudio;
+    deck.advance(130); // "Three": the last chapter of the file
+    engine.setPauseAtEnd(true);
+    deck.fire("ended");
+    const state = engine.getSnapshot();
+    expect(state.current?.id).toBe("file2");
+    expect(state.playing).toBe(false);
+    expect(state.pauseAtEnd).toBe(false);
+  });
+
+  it("is turned off by a music track", () => {
+    const { engine } = setup();
+    engine.playQueue(book, 0);
+    engine.setPauseAtEnd(true);
+    engine.playQueue(tracks, 0);
+    expect(engine.getSnapshot().pauseAtEnd).toBe(false);
+  });
+
   it("moves by the chapters inside the file, then by file", () => {
     const { engine, decks } = setup();
     engine.playQueue(book, 0);

@@ -207,6 +207,21 @@ export const LyricsIcon = () => (
   </Icon>
 );
 
+/** "Pause at end of chapter": a crescent moon with a small pause sign (a sleep timer). */
+export const PauseAtEndIcon = () => (
+  <Icon>
+    <path {...stroke} d="M16.5 15.5A7.5 7.5 0 0 1 8.5 3.6a8 8 0 1 0 10.9 10.9 7.4 7.4 0 0 1-2.9 1z" />
+    <path {...stroke} d="M17 3v5M20.5 3v5" />
+  </Icon>
+);
+
+/** iOS's Share button: a box with an arrow going up out of it. */
+export const IosShareIcon = () => (
+  <Icon>
+    <path {...stroke} d="M8 9H6v11h12V9h-2M12 3v12M8.5 6.5 12 3l3.5 3.5" />
+  </Icon>
+);
+
 /** Frequency bars. */
 export const VisualizerIcon = () => (
   <Icon>

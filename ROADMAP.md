@@ -81,7 +81,8 @@ Decisions taken on what is left to do (2026-09-28). The design of what exists is
    podcast API (`getPodcasts`, `getNewestPodcasts`, `getPodcastEpisode`; no RSS); player
    speed 1×–2× and −15 s / +30 s for these files, no shuffle / repeat / crossfade. Chapters
    inside a file (M4B / M4A chapter lists, ID3 `CHAP`) listed under it and in Now playing,
-   "previous" / "next" by chapter; books whose track numbers are inconsistent are ordered by
+   "previous" / "next" by chapter; "Pause at end of chapter" (a sleep timer: the moon button,
+   or the "⋯" menu on phones; pauses at the next chapter's start, or on the next file, once); books whose track numbers are inconsistent are ordered by
    file name; "Dismiss" in Continue listening; deletion in Library Management → Delete.
    Imports go through the review (spec: [docs/specs/spoken-import-review.md](docs/specs/spoken-import-review.md)):
    one card per book / show, metadata prefilled from tags and folder names, candidates from
@@ -98,7 +99,11 @@ Decisions taken on what is left to do (2026-09-28). The design of what exists is
    as a `.lrc` next to the audio (marked as ours; someone else's `.lrc` is never replaced);
    served like synced lyrics (Now playing, karaoke, `getLyricsBySongId`). Settings →
    Transcripts: tokens, what is being transcribed, each book's state, retry failed, remove.
-6. ✅ **Keyboard shortcuts** (web player): Space plays / pauses, ← / → go 10 s back /
+6. ✅ **Home-screen app** (phones): "Install as app" in the account menu (the browser's
+   install prompt on Android, Share → Add to Home Screen instructions on iPhone); full
+   screen clear of the notch and home bar (safe-area insets); lock screen with the cover,
+   the chapter, a progress bar and −15 / +30 for audiobooks and podcasts. No offline mode.
+7. ✅ **Keyboard shortcuts** (web player): Space plays / pauses, ← / → go 10 s back /
    forward, except while typing (text fields, lists), on focused buttons (Space) and
    sliders or menus (arrows).
 

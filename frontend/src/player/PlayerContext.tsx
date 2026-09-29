@@ -234,10 +234,16 @@ function useScrobbling(engine: PlayerEngine, client: SubsonicClient): void {
   }, [feed, state]);
 }
 
+// Audiobooks and podcasts: the lock screen's skip buttons (as the player bar's −15 / +30).
+const SKIP_BACK_S = 15;
+const SKIP_FORWARD_S = 30;
+
 /** OS integration: media keys, lock screen / notification controls. */
 function useMediaSession(engine: PlayerEngine, client: SubsonicClient): void {
   const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
   const current = state.current;
+  const spoken = state.spoken;
+  const chapterTitle = current?.chapters?.[state.chapter]?.title;
 
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
@@ -257,19 +263,56 @@ function useMediaSession(engine: PlayerEngine, client: SubsonicClient): void {
     }
   }, [engine]);
 
+  // Audiobooks and podcasts: skip buttons (iOS then shows them instead of previous / next).
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    const skip = (seconds: number) => () => {
+      const duration = engine.getSnapshot().duration;
+      engine.seek(Math.min(Math.max(engine.currentTime + seconds, 0), Math.max(duration - 0.5, 0)));
+    };
+    const handlers: [MediaSessionAction, MediaSessionActionHandler | null][] = [
+      ["seekbackward", spoken ? skip(-SKIP_BACK_S) : null],
+      ["seekforward", spoken ? skip(SKIP_FORWARD_S) : null],
+    ];
+    for (const [action, handler] of handlers) {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch {
+        // action not supported by this browser
+      }
+    }
+  }, [engine, spoken]);
+
+  // The lock screen's progress bar (and scrubbing, "seekto").
+  const duration = state.duration;
+  const position = Math.floor(state.position);
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
+    try {
+      navigator.mediaSession.setPositionState(
+        duration > 0
+          ? { duration, position: Math.min(position, duration), playbackRate: engine.playbackRate }
+          : undefined,
+      );
+    } catch {
+      // an inconsistent state (e.g. while a new file loads): the next update fixes it
+    }
+  }, [engine, duration, position]);
+
   useEffect(() => {
     if (!("mediaSession" in navigator) || typeof MediaMetadata === "undefined") return;
     navigator.mediaSession.metadata = current
       ? new MediaMetadata({
           title: current.title,
-          artist: current.artist ?? "",
+          // An audiobook's chapter inside the file, before its author.
+          artist: chapterTitle ? `${chapterTitle} · ${current.artist ?? ""}` : (current.artist ?? ""),
           album: current.album ?? "",
           artwork: current.coverArt
             ? [{ src: client.url("getCoverArt", { id: current.coverArt, size: 512 }), sizes: "512x512" }]
             : [],
         })
       : null;
-  }, [client, current]);
+  }, [client, current, chapterTitle]);
 
   useEffect(() => {
     if ("mediaSession" in navigator) navigator.mediaSession.playbackState = state.playing ? "playing" : "paused";

@@ -39,9 +39,9 @@ export function applyAppearance(appearance: Appearance): void {
   const root = document.documentElement;
   root.dataset.theme = resolveMode(appearance.mode);
   root.dataset.accent = knownAccent(appearance.accent);
-  // Browser UI color (mobile address bar...): the page background.
-  const background = getComputedStyle(root).getPropertyValue("--color-bg").trim();
-  if (background) document.querySelector('meta[name="theme-color"]')?.setAttribute("content", background);
+  // Browser UI color (mobile address bar, a home-screen app's status bar): the top bar's.
+  const surface = getComputedStyle(root).getPropertyValue("--color-surface").trim();
+  if (surface) document.querySelector('meta[name="theme-color"]')?.setAttribute("content", surface);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appearance));
   } catch {

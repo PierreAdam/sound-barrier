@@ -2,6 +2,7 @@ import { type CSSProperties, type JSX, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { formatTime } from "../format";
+import type { Track } from "../player/engine";
 import { usePlayer, useResumeNotice } from "../player/PlayerContext";
 import { usePreferences } from "../preferences/PreferencesContext";
 import { keepFocus } from "../player/shortcuts";
@@ -15,6 +16,7 @@ import {
   LyricsIcon,
   MoreIcon,
   NextIcon,
+  PauseAtEndIcon,
   PauseIcon,
   PlayIcon,
   PreviousIcon,
@@ -41,6 +43,11 @@ function storedVisualizer(): boolean {
 
 const REPEAT_LABELS = { off: "Repeat: off", all: "Repeat: all", one: "Repeat: this track" } as const;
 
+/** "Pause at end of chapter" (of episode for a podcast), for the current track. */
+function pauseAtEndLabel(track: Track | null): string {
+  return track?.spokenKind === "podcasts" && !track.chapters ? "Pause at end of episode" : "Pause at end of chapter";
+}
+
 /**
  * Always-visible player: seekable progress line on top; cover, title and artist on the
  * left; transport controls in the middle; crossfade, time and volume on the right.
@@ -58,10 +65,10 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
   const speed = preferences?.player.spokenSpeed ?? 1;
   const skip = (seconds: number) =>
     engine.seek(Math.min(Math.max(engine.currentTime + seconds, 0), Math.max(state.duration - 0.5, 0)));
-  const nextSpeed = () => {
-    const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] ?? 1;
+  const nextSpeed = () => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] ?? 1);
+  const setSpeed = (next: number) =>
     update((current) => ({ ...current, player: { ...current.player, spokenSpeed: next } }));
-  };
+  const pauseLabel = pauseAtEndLabel(current);
   const [miniVisualizer, setMiniVisualizer] = useState(storedVisualizer);
   const chapters = current?.chapters;
   const chapter = chapters?.[state.chapter];
@@ -124,6 +131,11 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
                   <button className="link-button" type="button" onClick={resume.startOver}>
                     Start over
                   </button>
+                </span>
+              ) : state.pauseAtEnd ? (
+                // Also on phones, where the button is in the "⋯" menu.
+                <span className="player__artist player__pause-note" role="status">
+                  <PauseAtEndIcon /> Pauses at the end of {chapter ? `"${chapter.title}"` : "this file"}
                 </span>
               ) : chapter ? (
                 <span className="player__artist" title={`${chapter.title} · ${current.artist ?? ""}`}>
@@ -214,6 +226,18 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
       <div className="player__right">
         {spoken && (
           <button
+            className={`icon-button player__pause-at-end${state.pauseAtEnd ? " icon-button--active" : ""}`}
+            type="button"
+            aria-label={pauseLabel}
+            aria-pressed={state.pauseAtEnd}
+            title={state.pauseAtEnd ? `${pauseLabel}: on (click to cancel)` : pauseLabel}
+            onClick={() => engine.setPauseAtEnd(!state.pauseAtEnd)}
+          >
+            <PauseAtEndIcon />
+          </button>
+        )}
+        {spoken && (
+          <button
             className={`icon-button player__speed${speed !== 1 ? " icon-button--active" : ""}`}
             type="button"
             aria-label={`Playback speed: ${speed}×`}
@@ -271,7 +295,13 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
         <span className="player__time">
           {formatTime(state.position)} / {formatTime(state.duration)}
         </span>
-        <PlayerMenu miniVisualizer={miniVisualizer} onToggleVisualizer={toggleVisualizer} />
+        <PlayerMenu
+          miniVisualizer={miniVisualizer}
+          onToggleVisualizer={toggleVisualizer}
+          speed={preferences ? speed : null}
+          onSpeed={setSpeed}
+          onSkip={skip}
+        />
         <div className="player__volume">
           <button
             className="icon-button"
@@ -301,7 +331,19 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
  * "⋯": the controls the bar has no room for (it shows once some collapse, see the
  * container queries of .player in theme.less). It holds all of them, always.
  */
-function PlayerMenu({ miniVisualizer, onToggleVisualizer }: { miniVisualizer: boolean; onToggleVisualizer(): void }) {
+function PlayerMenu({
+  miniVisualizer,
+  onToggleVisualizer,
+  speed,
+  onSpeed,
+  onSkip,
+}: {
+  miniVisualizer: boolean;
+  onToggleVisualizer(): void;
+  speed: number | null; // null: preferences not loaded yet
+  onSpeed(speed: number): void;
+  onSkip(seconds: number): void;
+}) {
   const { state, engine } = usePlayer();
 
   const item = (label: string, active: boolean, onClick: () => void, icon: JSX.Element) => (
@@ -336,6 +378,35 @@ function PlayerMenu({ miniVisualizer, onToggleVisualizer }: { miniVisualizer: bo
                 state.crossfade,
                 () => engine.toggleCrossfade(),
                 <CrossfadeIcon />,
+              )}
+            </>
+          )}
+          {/* Audiobooks and podcasts: what phones have no room for in the bar. */}
+          {state.spoken && (
+            <>
+              <div className="player-menu__row">
+                <button className="button button--ghost" type="button" onClick={() => onSkip(-15)}>
+                  −15 s
+                </button>
+                <button className="button button--ghost" type="button" onClick={() => onSkip(30)}>
+                  +30 s
+                </button>
+              </div>
+              {item(pauseAtEndLabel(state.current), state.pauseAtEnd, () => engine.setPauseAtEnd(!state.pauseAtEnd), <PauseAtEndIcon />)}
+              {speed !== null && (
+                <div className="player-menu__speeds" role="group" aria-label="Playback speed">
+                  {SPEEDS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      className={`player-menu__speed${s === speed ? " player-menu__speed--active" : ""}`}
+                      aria-pressed={s === speed}
+                      onClick={() => onSpeed(s)}
+                    >
+                      {s}×
+                    </button>
+                  ))}
+                </div>
               )}
             </>
           )}

@@ -6,6 +6,7 @@ import { SectionsProvider } from "../api/useSections";
 import { useAuth } from "../auth/AuthContext";
 import { PlayerProvider } from "../player/PlayerContext";
 import { PreferencesProvider } from "../preferences/PreferencesContext";
+import { DisplayDiagnostics } from "./DisplayDiagnostics";
 import { NowPlaying, NowPlayingProvider } from "./NowPlaying";
 import { PlayerDock } from "./PlayerDock";
 import { SidePanel } from "./SidePanel";
@@ -40,6 +41,7 @@ export function AppShell() {
               <NowPlaying />
               <PlayerDock />
             </div>
+            <DisplayDiagnostics />
           </NowPlayingProvider>
         </PlayerProvider>
       </SectionsProvider>

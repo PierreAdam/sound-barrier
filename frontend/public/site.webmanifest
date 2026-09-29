@@ -1,11 +1,16 @@
 {
+  "id": "/",
   "name": "Sound-Barrier",
-  "short_name": "Sound-Barrier",
+  "short_name": "Sound Barrier",
+  "description": "Your music, podcasts and audiobooks",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
   ],
-  "theme_color": "#121418",
-  "background_color": "#121418",
-  "display": "standalone"
+  "theme_color": "#1a1d23",
+  "background_color": "#121418"
 }

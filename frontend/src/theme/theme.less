@@ -32,6 +32,20 @@
   --color-accent-hover: color-mix(in srgb, var(--color-accent), #fff 18%);
   --color-focus: color-mix(in srgb, var(--color-accent) 55%, transparent);
   --color-logo-shock: color-mix(in srgb, var(--color-accent), #fff 62%);
+  // Behind the phone's status bar in the home-screen app (its text is white: always dark).
+  --color-status-bar: var(--color-surface);
+  // The sides kept clear in landscape: iOS reports the notch's inset on both sides, so
+  // src/pwa/notch.ts tells which one it is (data-notch) and the other goes.
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+:root[data-notch="left"] {
+  --safe-right: 0px;
+}
+
+:root[data-notch="right"] {
+  --safe-left: 0px;
 }
 
 :root[data-theme="light"] {
@@ -50,6 +64,7 @@
   --shadow-panel: 0 -8px 24px rgb(0 0 0 / 14%);
   --color-accent-hover: color-mix(in srgb, var(--color-accent), #000 15%);
   --color-logo-shock: color-mix(in srgb, var(--color-accent), #fff 45%);
+  --color-status-bar: #1a1d23;
 }
 
 // Accent palettes: a color for the dark theme and a deeper one for the light theme, each
@@ -115,6 +130,12 @@
 
 @topbar-height: 56px;
 @player-height: 88px;
+// Home-screen app on a phone (viewport-fit=cover): the status bar / notch on top; in
+// landscape, the notch on one side (0 in a browser tab). Not the home bar at the bottom:
+// the player bar goes down to the edge, the home indicator over its empty lower part.
+@safe-top: ~"env(safe-area-inset-top, 0px)";
+@safe-right: var(--safe-right);
+@safe-left: var(--safe-left);
 @sidepanel-width: 240px;
 // Album cards: at least this wide; they share the row and grow until one more fits, so
 // with 3 or more per row they stay between 200 and ~270 px (CSS pixels: the same size
@@ -604,9 +625,19 @@ a {
 // ---------------------------------------------------------------------------
 
 .app {
+  // Pinned to the screen's edges rather than 100% high: an iPhone's home-screen app makes
+  // the page shorter than the screen (under the status bar), which left a gap below the
+  // player bar. Also the box Now playing covers the middle row of.
+  position: fixed;
+  inset: 0;
   display: grid;
   grid-template-rows: @topbar-height minmax(0, 1fr) @player-height;
-  height: 100%;
+  // Clear of the phone's status bar / notch (home-screen app), that strip painted like the
+  // top bar.
+  padding: @safe-top @safe-right 0 @safe-left;
+  background:
+    linear-gradient(var(--color-status-bar), var(--color-status-bar)) top / 100% @safe-top no-repeat,
+    @color-bg;
 
   &__body {
     position: relative;
@@ -1427,7 +1458,7 @@ a {
 
   &__panel {
     position: absolute;
-    z-index: 20;
+    z-index: 35; // above the player bar
     top: @space-6;
     left: @space-2;
     display: flex;
@@ -1676,7 +1707,7 @@ a {
 
   &__panel {
     position: absolute;
-    z-index: 20;
+    z-index: 35; // above the player bar
     top: calc(100% + @space-1);
     left: 0;
     display: flex;
@@ -3400,7 +3431,7 @@ select.field__input {
 
 .player-dock {
   position: relative;
-  z-index: 4;
+  z-index: 30; // above Now playing: a tap on the bar never reaches the lyrics
   display: grid;
 }
 
@@ -3750,9 +3781,10 @@ select.field__input {
     padding: @space-4;
   }
 
+  // Above Now playing (25) too, below the player bar (30): the side menu opens over the lyrics.
   .sidepanel {
     position: absolute;
-    z-index: 3;
+    z-index: 27;
     top: 0;
     bottom: 0;
     left: 0;
@@ -3768,7 +3800,7 @@ select.field__input {
 
     .app__backdrop {
       position: absolute;
-      z-index: 2;
+      z-index: 26;
       inset: 0;
       display: block;
       background: @color-backdrop;
@@ -3833,12 +3865,28 @@ select.field__input {
   }
 
   .tracks__select,
-  .tracks__artist-column {
-    display: none;
+  .tracks__artist-column,
+  .queue__remove-selected {
+    display: none; // no checkboxes on phones: each queue row has its own ×
+  }
+
+  // The queue fills the screen between the bars, and so does the slot clipping it (else its
+  // top, with the Clear / Undo… actions, is cut off): pinned there like .app, not computed
+  // from the screen height (wrong in an iPhone's home-screen app).
+  .queue-slot {
+    position: fixed;
+    top: ~"calc(@{topbar-height} + @{safe-top})";
+    right: 0;
+    bottom: @player-height;
+    left: 0;
+    height: auto;
   }
 
   .queue {
-    height: calc(100vh - @topbar-height - @player-height);
+    height: 100%;
+  }
+
+  .queue {
 
     &__header {
       gap: @space-2;
@@ -3861,10 +3909,12 @@ select.field__input {
 
 // "Now playing": big cover, visualizer and lyrics, over the page content ------
 
+// Between the top bar and the player bar, in the app's grid (not the window: on phones the
+// window can be taller than the visible page, and it would then run under the player bar).
 .now-playing {
-  position: fixed;
+  position: absolute;
   z-index: 25;
-  inset: @topbar-height 0 @player-height 0;
+  inset: ~"calc(@{topbar-height} + @{safe-top})" @safe-right @player-height @safe-left;
   padding: @space-6;
   background: @color-bg;
 
@@ -3966,6 +4016,32 @@ select.field__input {
 
     &__visualizer {
       display: none;
+    }
+  }
+
+  // Phones held sideways: too low for the cover, the lyrics take the room (title above).
+  @media (max-height: 520px) and (orientation: landscape) {
+    padding: @space-3 @space-4;
+
+    &__body {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: @space-2;
+    }
+
+    &__side {
+      flex-direction: row;
+      align-items: center;
+      padding-right: @space-6; // the close button
+    }
+
+    &__cover,
+    &__visualizer {
+      display: none;
+    }
+
+    &__title {
+      font-size: @font-size-lg;
     }
   }
 }
@@ -4445,10 +4521,14 @@ select.field__input {
   }
 }
 
-// Phones: play / next, the queue (the only way to open it on touch), "Now playing" and "⋯".
+// Phones: play / next, the queue (the only way to open it on touch), "Now playing" and "⋯"
+// (which has the skips, the speed and "Pause at end of chapter" of audiobooks and podcasts).
 @container player (max-width: 640px) {
   .player__volume,
-  .player__previous {
+  .player__previous,
+  .player__skip,
+  .player__speed,
+  .player__pause-at-end {
     display: none;
   }
 
@@ -4551,6 +4631,56 @@ select.field__input {
     padding: @space-2;
     color: @color-text-muted;
   }
+
+  &__row {
+    display: flex;
+    gap: @space-1;
+
+    .button {
+      flex: 1;
+    }
+  }
+
+  &__speeds {
+    display: flex;
+    gap: 2px;
+    padding: @space-1 0;
+  }
+
+  &__speed {
+    flex: 1;
+    padding: @space-2 @space-1;
+    border: 0;
+    border-radius: @radius-sm;
+    background: transparent;
+    color: @color-text-muted;
+    font: inherit;
+    font-size: @font-size-sm;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+
+    &:hover {
+      background: @color-surface-hover;
+      color: @color-text;
+    }
+
+    &--active {
+      background: @color-surface-hover;
+      color: @color-accent;
+      font-weight: 600;
+    }
+  }
+}
+
+// "Pauses at the end of …" under the title, while it is on.
+.player__pause-note {
+  color: @color-accent;
+
+  .icon {
+    width: 14px;
+    height: 14px;
+    vertical-align: -2px;
+  }
 }
 
 // Top bar: collapsing -----------------------------------------------------------
@@ -4580,5 +4710,166 @@ select.field__input {
 @container topbar (max-width: 340px) {
   .topbar__brand {
     display: none;
+  }
+}
+
+// "Install as app" instructions (InstallDialog.tsx) ------------------------------------
+
+.install-dialog {
+  width: min(420px, calc(100vw - 2 * @space-4));
+  padding: @space-5;
+  border: 1px solid @color-border;
+  border-radius: @radius-md;
+  background: @color-surface-raised;
+  color: @color-text;
+  box-shadow: @shadow-panel;
+
+  &::backdrop {
+    background: @color-backdrop;
+  }
+
+  &__title {
+    margin: 0 0 @space-2;
+    font-size: @font-size-lg;
+  }
+
+  &__steps {
+    display: grid;
+    gap: @space-2;
+    margin: @space-3 0;
+    padding-left: @space-5;
+
+    .icon {
+      vertical-align: -4px;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+}
+
+// Touch screens: text fields at 16 px at least. iOS zooms into a smaller one when it is
+// tapped (sign-in, search…) and does not zoom back out.
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="range"]),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+// Display diagnostics (About → "Display diagnostics", DisplayDiagnostics.tsx) -----------
+
+// Where the app ends (blue), the window (red), the screen's height (green).
+:root[data-diagnostics] .app::after {
+  content: "";
+  position: absolute;
+  z-index: 200;
+  right: 0;
+  bottom: 0;
+  width: 33%;
+  height: 6px;
+  background: #3b82f6;
+  pointer-events: none;
+}
+
+.diagnostics-line {
+  position: fixed;
+  z-index: 200;
+  height: 6px;
+  pointer-events: none;
+
+  &--window {
+    bottom: 0;
+    left: 0;
+    width: 33%;
+    background: #ef4444;
+  }
+
+  &--screen {
+    top: calc(var(--screen-height, 100vh) - 6px);
+    left: 33%;
+    width: 34%;
+    background: #22c55e;
+  }
+}
+
+.diagnostics {
+  position: fixed;
+  z-index: 190;
+  top: ~"calc(@{topbar-height} + @{safe-top} + 8px)";
+  right: 8px;
+  left: 8px;
+  max-height: 55%;
+  overflow-y: auto;
+  padding: @space-2 @space-3;
+  border: 1px solid @color-border;
+  border-radius: @radius-sm;
+  background: color-mix(in srgb, @color-surface-raised 94%, transparent);
+  box-shadow: @shadow-panel;
+  font-size: 11px;
+  line-height: 1.35;
+
+  &--folded {
+    right: auto;
+  }
+
+  &__bar {
+    display: flex;
+    align-items: center;
+    gap: @space-3;
+  }
+
+  &__button {
+    padding: @space-1 0;
+    border: 0;
+    background: none;
+    color: @color-accent;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  &__legend {
+    display: block;
+    margin: @space-2 0;
+  }
+
+  &__red {
+    color: #ef4444;
+    font-weight: 700;
+  }
+
+  &__blue {
+    color: #3b82f6;
+    font-weight: 700;
+  }
+
+  &__green {
+    color: #22c55e;
+    font-weight: 700;
+  }
+
+  &__values {
+    margin: 0;
+
+    div {
+      display: grid;
+      grid-template-columns: 38% 1fr;
+      gap: @space-2;
+      padding: 2px 0;
+      border-top: 1px solid @color-border;
+    }
+
+    dt {
+      color: @color-text-muted;
+    }
+
+    dd {
+      margin: 0;
+      font-family: ui-monospace, monospace;
+      word-break: break-word;
+    }
   }
 }

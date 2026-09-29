@@ -1,10 +1,13 @@
+import { useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 
 import { useSections } from "../api/useSections";
 import { useAuth, useSession } from "../auth/AuthContext";
 import { BrandLogo } from "./BrandLogo";
+import { promptInstall, useInstallMethod } from "../pwa/install";
 import { Dropdown } from "./Dropdown";
 import { MenuIcon, UserIcon } from "./Icons";
+import { InstallDialog } from "./InstallDialog";
 import { SearchBox } from "./SearchBox";
 
 const MUSIC_ITEMS = [
@@ -100,50 +103,75 @@ function NavMenu() {
 function UserMenu() {
   const { logout } = useAuth();
   const { user } = useSession();
+  // Phones and tablets, when not already opened from the home screen.
+  const install = useInstallMethod();
+  const [instructions, setInstructions] = useState<"ios" | "manual" | null>(null);
+
+  async function onInstall() {
+    if (install === "prompt" && (await promptInstall())) return;
+    setInstructions(install === "ios" ? "ios" : "manual");
+  }
+
   return (
-    <Dropdown
-      buttonClassName="topbar__account"
-      label={`${user.username}: account menu`}
-      title={user.username}
-      button={
-        <>
-          <UserIcon />
-          <span className="topbar__username">{user.username}</span>
-        </>
-      }
-    >
-      {(close) => (
-        <>
-          <p className="dropdown__header">
-            <span className="dropdown__name">{user.username}</span>
-            {user.adminRole && <span className="badge">admin</span>}
-          </p>
-          <Link className="dropdown__item" role="menuitem" to="/account" onClick={close}>
-            My account
-          </Link>
-          {user.adminRole && (
-            <>
-              <Link className="dropdown__item" role="menuitem" to="/settings" onClick={close}>
-                Settings
-              </Link>
-              <Link className="dropdown__item" role="menuitem" to="/manage" onClick={close}>
-                Library Management
-              </Link>
-            </>
-          )}
-          <button
-            className="dropdown__item dropdown__item--separated"
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              close();
-              logout();
-            }}
-          >
-            Sign out
-          </button>
-        </>
-      )}
-    </Dropdown>
+    <>
+      {instructions && <InstallDialog method={instructions} onClose={() => setInstructions(null)} />}
+      <Dropdown
+        buttonClassName="topbar__account"
+        label={`${user.username}: account menu`}
+        title={user.username}
+        button={
+          <>
+            <UserIcon />
+            <span className="topbar__username">{user.username}</span>
+          </>
+        }
+      >
+        {(close) => (
+          <>
+            <p className="dropdown__header">
+              <span className="dropdown__name">{user.username}</span>
+              {user.adminRole && <span className="badge">admin</span>}
+            </p>
+            <Link className="dropdown__item" role="menuitem" to="/account" onClick={close}>
+              My account
+            </Link>
+            {user.adminRole && (
+              <>
+                <Link className="dropdown__item" role="menuitem" to="/settings" onClick={close}>
+                  Settings
+                </Link>
+                <Link className="dropdown__item" role="menuitem" to="/manage" onClick={close}>
+                  Library Management
+                </Link>
+              </>
+            )}
+            {install && (
+              <button
+                className="dropdown__item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  close();
+                  void onInstall();
+                }}
+              >
+                Install as app
+              </button>
+            )}
+            <button
+              className="dropdown__item dropdown__item--separated"
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                close();
+                logout();
+              }}
+            >
+              Sign out
+            </button>
+          </>
+        )}
+      </Dropdown>
+    </>
   );
 }

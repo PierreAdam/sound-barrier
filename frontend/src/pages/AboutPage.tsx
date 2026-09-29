@@ -1,6 +1,7 @@
 import { API_VERSION, CLIENT_NAME } from "../api/subsonic";
 import { useSubsonic } from "../api/useSubsonic";
 import { useSession } from "../auth/AuthContext";
+import { setDiagnosticsOpen } from "../pwa/diagnostics";
 
 export function AboutPage() {
   const { serverVersion } = useSession();
@@ -31,6 +32,12 @@ export function AboutPage() {
             .join(" · ") ?? "…"}
         </dd>
       </dl>
+      <p>
+        <button className="button button--ghost" type="button" onClick={() => setDiagnosticsOpen(true)}>
+          Display diagnostics
+        </button>{" "}
+        <span className="text-muted">Screen measurements, to report a layout problem on a phone.</span>
+      </p>
     </div>
   );
 }

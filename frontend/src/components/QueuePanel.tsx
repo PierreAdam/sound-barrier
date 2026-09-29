@@ -93,7 +93,12 @@ export function QueuePanel({ open, onClose }: { open: boolean; onClose(): void }
               Shuffle
             </button>
           )}
-          <button className="action-bar__item" type="button" onClick={removeSelected} disabled={!selected.size}>
+          <button
+            className="action-bar__item queue__remove-selected"
+            type="button"
+            onClick={removeSelected}
+            disabled={!selected.size}
+          >
             <RemoveIcon />
             Remove selected
           </button>

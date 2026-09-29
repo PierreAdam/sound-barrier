@@ -84,6 +84,8 @@ export interface PlayerSnapshot {
   chapter: number;
   /** The current track was started at a chosen position (a chapter): not to be resumed. */
   positioned: boolean;
+  /** Audiobooks and podcasts: pause when the current chapter (or file) ends, once. */
+  pauseAtEnd: boolean;
 }
 
 /** The queue as saved on the server (see useWebQueue). */
@@ -130,6 +132,8 @@ const RESTART_THRESHOLD_SECONDS = 3;
 /** This close before a chapter's start counts as in it (seeks may land a bit early). */
 const CHAPTER_SLACK_SECONDS = 0.5;
 const FADE_TICK_MS = 50;
+/** "Pause at end of chapter": the exact stop is timed when the chapter ends within this. */
+const STOP_TIMER_SECONDS = 1.5;
 const UNDO_LEVELS = 20;
 const DECK_EVENTS = ["timeupdate", "durationchange", "play", "pause", "ended", "error"] as const;
 
@@ -148,6 +152,8 @@ export class PlayerEngine {
   private snapshot: PlayerSnapshot;
   // Speed of podcasts and audiobooks (music always plays at 1x).
   private spokenSpeed = 1;
+  private pauseAtEnd = false;
+  private stopTimer: ReturnType<typeof setTimeout> | null = null;
   private history: { original: Entry[]; order: Entry[]; index: number }[] = [];
   // The entry started at a chosen position (playQueue's `startAt`).
   private positionedKey: number | null = null;
@@ -189,6 +195,7 @@ export class PlayerEngine {
 
   destroy(): void {
     this.cancelFade();
+    this.clearStopTimer();
     this.decks.forEach((deck) => deck.pause());
     this.detach.forEach((detach) => detach());
     this.listeners.clear();
@@ -326,6 +333,7 @@ export class PlayerEngine {
       void deck.play().catch(() => this.emit());
     } else {
       this.cancelFade();
+      this.clearStopTimer();
       deck.pause();
     }
   }
@@ -371,7 +379,20 @@ export class PlayerEngine {
 
   seek(seconds: number): void {
     this.cancelFade();
+    this.clearStopTimer();
     this.deck.currentTime = seconds;
+    this.emit();
+  }
+
+  /**
+   * Audiobooks and podcasts: pause at the end of the chapter playing when it ends (a
+   * chapter inside the file, else the file), exactly at the next one's start, so playing
+   * again starts it. Once: it turns itself off. Turned off by a music track.
+   */
+  setPauseAtEnd(enabled: boolean): void {
+    this.pauseAtEnd = enabled;
+    this.clearStopTimer();
+    this.checkPauseAtEnd();
     this.emit();
   }
 
@@ -433,6 +454,11 @@ export class PlayerEngine {
     const current = this.currentEntry;
     if (current) this.applySpeed(this.deck, current.track);
     this.emit();
+  }
+
+  /** The current playback speed (for the OS' lock screen progress). */
+  get playbackRate(): number {
+    return this.deck.playbackRate || 1;
   }
 
   get currentSpokenSpeed(): number {
@@ -522,8 +548,10 @@ export class PlayerEngine {
 
   private load(autoplay: boolean): void {
     this.cancelFade();
+    this.clearStopTimer();
     const deck = this.deck;
     const entry = this.currentEntry;
+    if (!entry?.track.longForm) this.pauseAtEnd = false;
     if (!entry) {
       deck.pause();
       deck.removeAttribute("src");
@@ -545,12 +573,55 @@ export class PlayerEngine {
       return;
     }
     if (type === "timeupdate") this.maybeStartCrossfade();
+    if (type === "timeupdate" || type === "play") this.checkPauseAtEnd();
     this.emit();
+  }
+
+  /** The next chapter's start inside the file (the end of the one playing), if any. */
+  private chapterEnd(position: number): number | undefined {
+    // Past the slack: a chapter chosen by a seek landing just before its start is not "ended".
+    return this.currentEntry?.track.chapters?.find((c) => c.start > position + CHAPTER_SLACK_SECONDS)?.start;
+  }
+
+  /** Times the stop when the current chapter is about to end (timeupdate is too coarse). */
+  private checkPauseAtEnd(): void {
+    const deck = this.deck;
+    if (!this.pauseAtEnd || !this.spoken || deck.paused || this.stopTimer) return;
+    const end = this.chapterEnd(deck.currentTime);
+    if (end === undefined) return; // the file's end: onEnded
+    const remaining = (end - deck.currentTime) / (deck.playbackRate || 1);
+    if (remaining > STOP_TIMER_SECONDS) return;
+    this.stopTimer = setTimeout(() => {
+      this.stopTimer = null;
+      if (!this.pauseAtEnd || this.deck.paused) return;
+      this.pauseAtEnd = false;
+      this.deck.pause();
+      this.deck.currentTime = end;
+      this.emit();
+    }, Math.max(remaining, 0) * 1000);
+  }
+
+  private clearStopTimer(): void {
+    if (this.stopTimer) clearTimeout(this.stopTimer);
+    this.stopTimer = null;
   }
 
   private onEnded(): void {
     if (this.fade) {
       this.finishFade();
+      return;
+    }
+    if (this.pauseAtEnd && this.spoken) {
+      // The file ended: paused on the next one (at its start), if there is one.
+      this.pauseAtEnd = false;
+      this.deck.pause();
+      const following = nextIndex(this.index, this.order.length, "off", true);
+      if (following === null) {
+        this.emit();
+        return;
+      }
+      this.index = following;
+      this.load(false);
       return;
     }
     const next = nextIndex(this.index, this.order.length, this.repeatMode, true);
@@ -671,6 +742,7 @@ export class PlayerEngine {
       spoken: current?.longForm ?? false,
       chapter,
       positioned: entry !== undefined && entry.key === this.positionedKey,
+      pauseAtEnd: this.pauseAtEnd,
     };
   }
 

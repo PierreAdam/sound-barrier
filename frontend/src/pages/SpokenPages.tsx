@@ -101,8 +101,13 @@ export function SpokenPage({ kind }: { kind: SpokenKind }) {
     }
   }
 
+  // "Dismiss" asks first: the buttons become Confirm (where Resume was) and Cancel, so a
+  // slip of the finger cannot forget where the user stopped.
+  const [dismissing, setDismissing] = useState<string | null>(null);
+
   /** Out of "Continue listening": the show's / book's bookmarks go. */
   async function dismiss(show: SpokenShow) {
+    setDismissing(null);
     try {
       await api.forgetSpokenShow(show.id);
       setData((current) =>
@@ -146,19 +151,35 @@ export function SpokenPage({ kind }: { kind: SpokenKind }) {
                     <Progress value={duration ? listened(episode) / duration : 0} />
                     <span className="text-muted spoken__small">{formatDuration(Math.max(0, duration - listened(episode)))} left</span>
                   </div>
-                  <div className="spoken__resume-actions">
-                    <button className="button button--primary" type="button" onClick={() => void resume(show, episode.id)}>
-                      <PlayIcon /> Resume
-                    </button>
-                    <button
-                      className="button"
-                      type="button"
-                      title="Forget where you stopped: out of this list"
-                      onClick={() => void dismiss(show)}
-                    >
-                      Dismiss
-                    </button>
-                  </div>
+                  {dismissing === show.id ? (
+                    <div className="spoken__resume-actions" role="group" aria-label={`Dismiss ${show.title}?`}>
+                      <button
+                        className="button button--danger"
+                        type="button"
+                        title="Forget where you stopped: out of this list"
+                        onClick={() => void dismiss(show)}
+                      >
+                        Confirm
+                      </button>
+                      <button className="button" type="button" onClick={() => setDismissing(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="spoken__resume-actions">
+                      <button className="button button--primary" type="button" onClick={() => void resume(show, episode.id)}>
+                        <PlayIcon /> Resume
+                      </button>
+                      <button
+                        className="button"
+                        type="button"
+                        title="Forget where you stopped: out of this list (asks to confirm)"
+                        onClick={() => setDismissing(show.id)}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
                 </li>
               );
             })}
