@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
+import { bumpCovers } from "../api/coverVersions";
 import { api, type CoverResult } from "../api/native";
 import { invalidateSubsonicCache, useSubsonic } from "../api/useSubsonic";
 import { useSession } from "../auth/AuthContext";
@@ -57,8 +58,10 @@ export function AlbumCoverPage() {
     setBusy(true);
     setError(null);
     try {
-      await api.setAlbumCover(id, selected.imageUrl, embed);
+      const saved = await api.setAlbumCover(id, selected.imageUrl, embed);
       invalidateSubsonicCache();
+      // The same coverArt id may now be another image: every copy of it on the page reloads.
+      bumpCovers(album?.coverArt, saved.coverArt);
       navigate(`/albums/${id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

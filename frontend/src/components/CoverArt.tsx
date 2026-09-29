@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { coverVersion, useCoverVersion } from "../api/coverVersions";
 import { useSession } from "../auth/AuthContext";
 import { MusicNoteIcon } from "./Icons";
 
@@ -14,6 +15,7 @@ interface Props {
 export function CoverArt({ id, size, alt = "", className = "" }: Props) {
   const { client } = useSession();
   const [failedId, setFailedId] = useState<string | null>(null);
+  useCoverVersion(id); // a changed cover (new "rev" in its URL) is drawn again
   const classes = `cover ${className}`.trim();
 
   if (!id || failedId === id) {
@@ -26,7 +28,7 @@ export function CoverArt({ id, size, alt = "", className = "" }: Props) {
   return (
     <img
       className={classes}
-      src={client.url("getCoverArt", { id, size: Math.min(size * 2, 1024) })}
+      src={client.url("getCoverArt", { id, size: Math.min(size * 2, 1024), ...coverVersion(id) })}
       alt={alt}
       loading="lazy"
       onError={() => setFailedId(id)}

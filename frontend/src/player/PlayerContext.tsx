@@ -10,6 +10,7 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import { coverVersion } from "../api/coverVersions";
 import type { SubsonicClient } from "../api/subsonic";
 import { useSession } from "../auth/AuthContext";
 import { usePreferences } from "../preferences/PreferencesContext";
@@ -308,7 +309,12 @@ function useMediaSession(engine: PlayerEngine, client: SubsonicClient): void {
           artist: chapterTitle ? `${chapterTitle} · ${current.artist ?? ""}` : (current.artist ?? ""),
           album: current.album ?? "",
           artwork: current.coverArt
-            ? [{ src: client.url("getCoverArt", { id: current.coverArt, size: 512 }), sizes: "512x512" }]
+            ? [
+                {
+                  src: client.url("getCoverArt", { id: current.coverArt, size: 512, ...coverVersion(current.coverArt) }),
+                  sizes: "512x512",
+                },
+              ]
             : [],
         })
       : null;
