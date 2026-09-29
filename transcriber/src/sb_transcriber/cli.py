@@ -4,10 +4,10 @@
     transcriber list                                books / shows that wait for text
     transcriber show "dune"                         the files of one, and their state
     transcriber run "dune" --gpu 0                  transcribes it (and more: several names)
-    transcriber run --all --gpu 1                   everything that waits
+    transcriber run --all --gpu all                 everything that waits, on every GPU
     transcriber devices                             the GPUs CTranslate2 sees
 
-Two GPUs: one `run` per GPU (two terminals); they never take the same file.
+--gpu: a GPU (0), a list (0,1) or all: one worker per GPU; they never take the same file.
 """
 
 import argparse
@@ -20,11 +20,15 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from sb_transcriber import config
+from sb_transcriber import config, gpus
 from sb_transcriber.client import Claim, Client, LostClaimError, ServerError
 
 RENEW_EVERY = 60.0  # seconds; the server's lease is longer (10 minutes)
 MAX_FAILURES = 3  # in a row: something is wrong with this PC (e.g. CUDA), stop
+CHILD_STATUS_EVERY = 5.0  # a GPU worker (--gpu all) prints its progress this often
+
+_child = False  # a worker of `--gpu all`: full lines, the parent prefixes them
+_last_status = 0.0
 
 
 def _duration(ms: int) -> str:
@@ -149,9 +153,19 @@ class _Renewer:
             self._last = now
 
 
-def _status(text: str) -> None:
+def _status(text: str, final: bool = False) -> None:
+    """The current step, rewritten in place (a GPU worker: a line now and then)."""
+    global _last_status
+    if _child:
+        now = time.monotonic()
+        if final or now - _last_status >= CHILD_STATUS_EVERY:
+            print(text.strip(), flush=True)
+            _last_status = now
+        return
     width = shutil.get_terminal_size((100, 20)).columns - 1
     print(f"\r{text[:width]:<{width}}", end="", flush=True)
+    if final:
+        print()
 
 
 def _process(client: Client, engine: Any, claim: Claim, language: str | None) -> None:
@@ -183,9 +197,9 @@ def _process(client: Client, engine: Any, claim: Claim, language: str | None) ->
         where = "database and .lrc file" if answer.get("lrcWritten") else "database"
         _status(
             f"  {label}: done, {len(result.lines)} lines ({result.language or '?'}), "
-            f"{elapsed / 60:.1f} min ({seconds / max(elapsed, 1):.0f}x real time), in the {where}"
+            f"{elapsed / 60:.1f} min ({seconds / max(elapsed, 1):.0f}x real time), in the {where}",
+            final=True,
         )
-        print()
     finally:
         work.unlink(missing_ok=True)
 
@@ -225,21 +239,38 @@ def _work_through(
                 ) from error
 
 
+def _gpu(args: argparse.Namespace) -> int | None:
+    """The GPU of this process; None: several were asked for, and their workers were run."""
+    global _child
+    chosen = gpus.parse(args.gpu)
+    if len(chosen) > 1 and not args.child:
+        code = gpus.run_workers(sys.argv[1:], chosen)
+        if code:
+            sys.exit(code)
+        return None
+    _child = args.child
+    gpus.use(chosen[0])
+    return chosen[0]
+
+
 def cmd_run(args: argparse.Namespace) -> None:
     if not args.books and not args.all:
         raise SystemExit("Name books / shows to transcribe (see `transcriber list`), or --all")
+    gpu = _gpu(args)
+    if gpu is None:
+        return
     client = _client()
     try:
         client.hello()
         books = _resolve(client, args.books, args.kind) if args.books else []
         print(
-            f"Loading whisper {args.model} on GPU {args.gpu} ({args.compute_type}); "
+            f"Loading whisper {args.model} on GPU {gpu} ({args.compute_type}); "
             f"the first time it is downloaded into {config.MODELS}…"
         )
         from sb_transcriber.engine import Engine
 
-        engine = Engine(args.model, args.gpu, args.compute_type, args.batch_size)
-        instance = f"GPU {args.gpu}"
+        engine = Engine(args.model, 0, args.compute_type, args.batch_size)  # its only GPU
+        instance = f"GPU {gpu}"
         targets: list[str | None] = [b["id"] for b in books] or [None]
         total = 0
         for album_id in targets:
@@ -293,7 +324,10 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("books", nargs="*", help="ids or (parts of) titles")
     run.add_argument("--all", action="store_true", help="everything that waits")
     run.add_argument("--kind", choices=kinds, help="only audiobooks, or only podcasts")
-    run.add_argument("--gpu", type=int, default=0, help="the GPU (see `devices`), default 0")
+    run.add_argument(
+        "--gpu", default="0", help="a GPU (see `devices`), a list (0,1) or all; default 0"
+    )
+    run.add_argument(gpus.CHILD_FLAG, dest="child", action="store_true", help=argparse.SUPPRESS)
     run.add_argument(
         "--model",
         default="large-v3",

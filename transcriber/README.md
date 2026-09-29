@@ -22,7 +22,8 @@ large-v3 by default), with voice activity detection and the timing of every word
 - The app signs in with a **worker token** (Settings → Transcripts), not with a user's
   password. The token only lets it list, download and transcribe podcasts and audiobooks.
   It is saved in `config.toml` in this folder; revoke it in Settings when needed.
-- Two GPUs: run one `run` per GPU (two terminals). They never take the same file.
+- Two GPUs: `--gpu all` runs one worker per GPU. They never take the same file: the
+  faster GPU simply takes more.
 - A PC turned off mid-file: after 10 minutes the file waits again for any worker.
   Ctrl+C gives it back at once.
 
@@ -68,7 +69,7 @@ On Linux, `./transcriber.sh` instead of `transcriber.cmd`.
 transcriber.cmd list                        what waits for text
 transcriber.cmd show "dune"                 the files of a book / show, and their state
 transcriber.cmd run "dune" --gpu 0          transcribes a book (several names allowed)
-transcriber.cmd run --all --gpu 0           everything that waits
+transcriber.cmd run --all --gpu all         everything that waits, on every GPU
 transcriber.cmd run --all --kind podcasts --gpu 1
 transcriber.cmd devices                     the GPUs that can be used
 ```
@@ -79,7 +80,7 @@ Options of `run`:
 
 | Option | Default | |
 |---|---|---|
-| `--gpu N` | 0 | the GPU (`devices`, or `nvidia-smi -L`) |
+| `--gpu` | 0 | a GPU (`devices`, or `nvidia-smi -L`), a list (`0,1`), or `all`: one worker per GPU, each line of progress prefixed with its GPU; Ctrl+C gives every file back |
 | `--model` | `large-v3` | `large-v3-turbo` (much faster, nearly as good), `medium`, `small` |
 | `--language` | detected | e.g. `fr`, `en`: detected on the first 30 minutes of each file otherwise |
 | `--compute-type` | `float16` | `int8_float16` uses less GPU memory |

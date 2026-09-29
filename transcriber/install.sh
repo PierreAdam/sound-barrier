@@ -51,4 +51,4 @@ echo
 echo "Installed. Next, with a token from Sound-Barrier (Settings -> Transcripts):"
 echo "  ./transcriber.sh login https://your-server"
 echo "  ./transcriber.sh list"
-echo "  ./transcriber.sh run --all --gpu 0"
+echo "  ./transcriber.sh run --all --gpu all"
