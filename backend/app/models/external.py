@@ -11,6 +11,20 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
 
 
+class AlbumInfo(Base):
+    """An album's notes (Last.fm wiki), for getAlbumInfo. Refreshed after some time."""
+
+    __tablename__ = "album_info"
+
+    album_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("album.id", ondelete="CASCADE"), primary_key=True
+    )
+    lastfm_url: Mapped[str | None]
+    notes: Mapped[str | None]
+    fetched_at: Mapped[datetime | None]
+    error: Mapped[str | None]
+
+
 class ArtistInfo(Base):
     """Biography, similar artists and top tracks (Last.fm), picture (a picture provider)
     and discography (MusicBrainz) of an artist. Refreshed after some time; the picture

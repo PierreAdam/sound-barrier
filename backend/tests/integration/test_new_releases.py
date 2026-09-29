@@ -1,4 +1,4 @@
-"""New releases (Manage Library), with MusicBrainz replaced by a fake transport."""
+"""New releases (Library Management), with MusicBrainz replaced by a fake transport."""
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta

@@ -1,4 +1,4 @@
-"""Last.fm web API: artist biographies, similar artists and top tracks.
+"""Last.fm web API: artist biographies, similar artists, top tracks and album notes.
 
 Last.fm's user-contributed texts are licensed CC BY-SA: whatever shows them must credit
 Last.fm and link to the artist's Last.fm page.
@@ -42,6 +42,13 @@ class LastFmArtist:
     biography: str
     similar: list[SimilarArtist] = field(default_factory=list[SimilarArtist])
     tags: list[str] = field(default_factory=list[str])
+
+
+@dataclass
+class LastFmAlbum:
+    url: str | None
+    summary: str
+    notes: str  # the album's wiki text
 
 
 class InvalidApiKeyError(ExternalServiceError):
@@ -120,6 +127,21 @@ class LastFm:
             for t in tracks
             if _text(t, "name")
         ]
+
+    async def album(self, artist: str, title: str, mbid: str | None = None) -> LastFmAlbum | None:
+        """By the release's MusicBrainz id when known, else by artist and title."""
+        data = await self._call("album.getInfo", mbid=mbid) if mbid else None
+        if data is None:
+            data = await self._call("album.getInfo", artist=artist, album=title, autocorrect="1")
+        album = _dict(data, "album")
+        if not album:
+            return None
+        wiki = _dict(album, "wiki")
+        return LastFmAlbum(
+            url=_text(album, "url"),
+            summary=plain_text(_text(wiki, "summary")),
+            notes=plain_text(_text(wiki, "content")),
+        )
 
     async def check_key(self) -> None:
         """InvalidApiKeyError if Last.fm refuses the key."""

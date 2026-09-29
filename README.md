@@ -17,7 +17,7 @@ command line, no config files to edit.
 |---|---|
 | ![Home page, signed in as an admin](docs/screenshots/home.png) | ![An album page](docs/screenshots/album.png) |
 | **Home**: random picks, recently added / played, the artist index | **Album**: tracks, actions, cover picker |
-| ![Review of an import in Manage Library](docs/screenshots/review.png) | ![The player with the queue open](docs/screenshots/player.png) |
+| ![Review of an import in Library Management](docs/screenshots/review.png) | ![The player with the queue open](docs/screenshots/player.png) |
 | **Import review**: MusicBrainz candidates with track-by-track differences | **Player**: the queue panel, with crossfade, shuffle and repeat |
 
 ## Features

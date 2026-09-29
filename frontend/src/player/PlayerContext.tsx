@@ -11,6 +11,7 @@ import {
 import type { SubsonicClient } from "../api/subsonic";
 import { useSession } from "../auth/AuthContext";
 import { usePreferences } from "../preferences/PreferencesContext";
+import { resumeAudio } from "./audioGraph";
 import { PlayerEngine, type PlayerSnapshot } from "./engine";
 import { createScrobbler } from "./scrobble";
 import { useWebQueue } from "./useWebQueue";
@@ -47,6 +48,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useSyncedPlayerPreferences(engine);
   useWebQueue(engine);
   useScrobbling(engine, client);
+  useAudioResume(engine);
   return <PlayerContext.Provider value={engine}>{children}</PlayerContext.Provider>;
 }
 
@@ -82,6 +84,14 @@ function useSyncedPlayerPreferences(engine: PlayerEngine): void {
       return { ...current, player: { crossfade: state.crossfade, crossfadeSeconds: state.crossfadeSeconds } };
     });
   }, [state.crossfade, state.crossfadeSeconds, update]);
+}
+
+/** Playing again after the tab slept: the visualizers' AudioContext must run too. */
+function useAudioResume(engine: PlayerEngine): void {
+  const playing = useSyncExternalStore(engine.subscribe, () => engine.getSnapshot().playing);
+  useEffect(() => {
+    if (playing) resumeAudio();
+  }, [playing]);
 }
 
 /** Reports plays to the server (Subsonic `scrobble`): play counts, recently played. */

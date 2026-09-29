@@ -76,6 +76,7 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
   // Album folders of the listing already in the library (an information only).
   const [inLibrary, setInLibrary] = useState<Map<string, InLibraryFolder>>(() => new Map());
   const [order, setOrder] = useState<SortOrder>("newest");
+  const [analyzing, setAnalyzing] = useState(false);
 
   const open = useCallback(async (path?: string) => {
     setError(null);
@@ -97,12 +98,16 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
     setInLibrary(new Map());
     if (!listed) return;
     let cancelled = false;
+    setAnalyzing(true);
     api
       .browseInLibrary(listed)
       .then((found) => {
         if (!cancelled) setInLibrary(new Map(found.map((f) => [f.path, f])));
       })
-      .catch((e: unknown) => console.error("Cannot tell which folders are in the library", e));
+      .catch((e: unknown) => console.error("Cannot tell which folders are in the library", e))
+      .finally(() => {
+        if (!cancelled) setAnalyzing(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -163,6 +168,11 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
           {where && (
             <span className="browser__path" title={listing.path}>
               {where}
+            </span>
+          )}
+          {analyzing && (
+            <span className="badge browser__analyzing" title="Looking for the album folders the library already has">
+              Analyzing…
             </span>
           )}
           <span className="browser__sort" role="group" aria-label="Sort">

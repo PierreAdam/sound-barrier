@@ -106,15 +106,6 @@ export const CrossfadeIcon = () => (
   </Icon>
 );
 
-export const SettingsIcon = () => (
-  <Icon>
-    <path
-      {...stroke}
-      d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"
-    />
-  </Icon>
-);
-
 export const InfoIcon = () => (
   <Icon>
     <circle cx="12" cy="12" r="9" {...stroke} />
@@ -190,12 +181,6 @@ export const UserIcon = () => (
   </Icon>
 );
 
-export const LibraryIcon = () => (
-  <Icon>
-    <path {...stroke} d="M4 4v16M9 4v16M14 5l5 15M3 20h18" />
-  </Icon>
-);
-
 /** A record: an artist's discography. */
 export const DiscIcon = () => (
   <Icon>
@@ -203,5 +188,30 @@ export const DiscIcon = () => (
       fillRule="evenodd"
       d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm0 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"
     />
+  </Icon>
+);
+
+/** Lyrics / "Now playing": lines of text with a note. */
+export const LyricsIcon = () => (
+  <Icon>
+    <path {...stroke} d="M4 6h11M4 11h11M4 16h6" />
+    <circle cx="17.5" cy="17.5" r="2.5" />
+    <path {...stroke} d="M19.5 17.5V8.5l2 1" />
+  </Icon>
+);
+
+/** Frequency bars. */
+export const VisualizerIcon = () => (
+  <Icon>
+    <path {...stroke} d="M4 20v-5M8 20V9M12 20V4M16 20v-8M20 20v-3" />
+  </Icon>
+);
+
+/** "More": three dots. */
+export const MoreIcon = () => (
+  <Icon>
+    <circle cx="5" cy="12" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="19" cy="12" r="2" />
   </Icon>
 );

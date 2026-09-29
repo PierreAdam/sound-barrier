@@ -1,4 +1,4 @@
-"""Regular cleanups: run 10 minutes after start, then once a day (and from Manage Library).
+"""Regular cleanups: run 10 minutes after start, then once a day (and from Library Management).
 
 - beets' database backups left by its migrations (`library.db-before-*.bak`);
 - beets entries whose file no longer exists;

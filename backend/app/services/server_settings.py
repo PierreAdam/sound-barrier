@@ -36,7 +36,7 @@ IMPORT_SETTINGS_KEY = "import_settings"
 
 
 class ImportSettings(BaseModel):
-    """Import options (Settings page). `root` is the only folder the Manage Library page
+    """Import options (Settings page). `root` is the only folder the Library Management page
     can browse and import from (e.g. the downloads folder)."""
 
     root: str | None = None  # absolute path on the server
@@ -86,6 +86,7 @@ class ExternalServices(BaseModel):
     fanart_key_enc: str | None = None
     picture_source: str = "deezer"  # "none" or an app.external.pictures provider id
     musicbrainz: bool = True  # artist discographies ("Missing albums")
+    lrclib: bool = True  # song lyrics from lrclib.net (when the files have none)
 
 
 async def get_external_services(session: AsyncSession) -> ExternalServices:

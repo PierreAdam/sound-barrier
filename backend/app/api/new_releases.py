@@ -1,4 +1,4 @@
-"""New releases (Manage Library, admins): recent and upcoming releases of the library's
+"""New releases (Library Management, admins): recent and upcoming releases of the library's
 artists that the library does not have, and the background refresh of their
 discographies."""
 

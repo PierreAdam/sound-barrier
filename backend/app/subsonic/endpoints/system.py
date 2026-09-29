@@ -7,6 +7,7 @@ OPENSUBSONIC_EXTENSIONS = [
     OpenSubsonicExtension(name="apiKeyAuthentication", versions=[1]),
     OpenSubsonicExtension(name="formPost", versions=[1]),
     OpenSubsonicExtension(name="indexBasedQueue", versions=[1]),
+    OpenSubsonicExtension(name="songLyrics", versions=[1]),
 ]
 
 

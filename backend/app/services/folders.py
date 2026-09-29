@@ -6,6 +6,7 @@ Each music folder has a root directory row (path ""); its sub-directories are th
 """
 
 import uuid
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -15,7 +16,7 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.text import normalize
-from app.models import AppUser, Directory, Scan, Song
+from app.models import Album, AppUser, Directory, Scan, Song
 from app.services import browsing
 from app.services.browsing import AlbumEntry, SongEntry
 
@@ -143,3 +144,65 @@ async def search_top_folders(
     words = browsing.search_words(query)
     found = [f for f in folders if all(w in normalize(f.name) for w in words)]
     return found[max(0, offset) : max(0, offset) + max(0, count)]
+
+
+# --- folder ids of the ID3 world (getArtistInfo, getAlbumInfo, getSimilarSongs) ---------
+
+
+def _under(directory: Directory) -> ColumnElement[bool]:
+    """The songs inside `directory` (at any depth)."""
+    inside = Song.music_folder_id == directory.music_folder_id
+    if not directory.path:
+        return inside
+    return inside & Song.path.startswith(f"{directory.path}/", autoescape=True)
+
+
+async def artist_of_directory(session: AsyncSession, directory: Directory) -> uuid.UUID | None:
+    """The album artist of most songs inside the folder (an artist folder of the index)."""
+    return await session.scalar(
+        select(Album.artist_id)
+        .join(Song, Song.album_id == Album.id)
+        .where(_under(directory), Song.missing_since.is_(None))
+        .group_by(Album.artist_id)
+        .order_by(func.count().desc())
+        .limit(1)
+    )
+
+
+async def album_of_directory(session: AsyncSession, directory: Directory) -> uuid.UUID | None:
+    """The album of most songs of the folder (its own songs first, else those inside)."""
+    for where in (Song.directory_id == directory.id, _under(directory)):
+        album_id = await session.scalar(
+            select(Song.album_id)
+            .where(where, Song.missing_since.is_(None))
+            .group_by(Song.album_id)
+            .order_by(func.count().desc())
+            .limit(1)
+        )
+        if album_id is not None:
+            return album_id
+    return None
+
+
+async def directory_of_artist(session: AsyncSession, artist_id: uuid.UUID) -> Directory | None:
+    """The index folder (right under a music folder's root) holding most of the artist's
+    songs: the artist as folder-browsing clients know it."""
+    rows = (
+        await session.execute(
+            select(Song.music_folder_id, Song.path)
+            .join(Album, Album.id == Song.album_id)
+            .where(Album.artist_id == artist_id, Song.missing_since.is_(None))
+            .limit(200)
+        )
+    ).all()
+    tops = Counter((folder, path.split("/")[0]) for folder, path in rows if "/" in path)
+    if not tops:
+        return None
+    (folder_id, top), _ = tops.most_common(1)[0]
+    return await session.scalar(
+        select(Directory).where(
+            Directory.music_folder_id == folder_id,
+            Directory.path == top,
+            Directory.missing_since.is_(None),
+        )
+    )

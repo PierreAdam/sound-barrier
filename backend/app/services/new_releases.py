@@ -1,4 +1,4 @@
-"""New releases (Manage Library): the recent and upcoming release groups of every album
+"""New releases (Library Management): the recent and upcoming release groups of every album
 artist of the library that the library does not have.
 
 The discographies come from the per-artist cache of `discography.py`. A background job

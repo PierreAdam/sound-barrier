@@ -3,7 +3,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { api, type ManageSettings } from "../../api/native";
 import { FolderIcon } from "../../components/Icons";
 
-/** Admins: import root folder and import options (used by the Manage Library page). */
+/** Admins: import root folder and import options (used by the Library Management page). */
 export function ImportSection() {
   const [settings, setSettings] = useState<ManageSettings | null>(null);
   const [root, setRoot] = useState("");
@@ -74,7 +74,7 @@ export function ImportSection() {
           <p className="text-error">This folder is not reachable from the server.</p>
         )}
         <p className="text-muted">
-          Where new music is downloaded. The Manage Library page shows what is inside it; only this folder and its
+          Where new music is downloaded. The Library Management page shows what is inside it; only this folder and its
           sub-folders can be browsed and imported. Files are copied into the library: the originals are kept.
         </p>
       </form>

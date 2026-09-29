@@ -8,6 +8,7 @@ from app.api import (
     discography,
     external,
     library,
+    lyrics,
     manage,
     new_releases,
     plugins,
@@ -21,6 +22,7 @@ def build_router() -> APIRouter:
     router = APIRouter()
     router.include_router(auth.router)
     router.include_router(library.router)
+    router.include_router(lyrics.router)
     router.include_router(manage.router)
     router.include_router(new_releases.router)
     router.include_router(preferences.router)

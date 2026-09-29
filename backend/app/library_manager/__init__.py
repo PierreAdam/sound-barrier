@@ -1,4 +1,4 @@
-"""Library management (Manage Library page): import, review, delete.
+"""Library management (Library Management page): import, review, delete.
 
 The tagging engine is behind `Tagger` (tagger.py); `get_tagger()` picks the one to use.
 """

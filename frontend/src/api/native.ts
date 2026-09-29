@@ -91,7 +91,7 @@ export interface ScheduleResponse extends ScanSchedule {
   timeZone: string;
 }
 
-// --- Manage Library ---------------------------------------------------------------
+// --- Library Management ---------------------------------------------------------------
 
 export interface ManageSettings {
   root: string | null; // import root folder
@@ -288,6 +288,7 @@ export interface ExternalSettings {
   pictureSource: string; // "none" or a provider id
   pictureSources: { id: string; label: string; needsKey: string | null }[];
   musicbrainz: boolean; // discographies ("Missing albums" on artist pages)
+  lrclib: boolean; // song lyrics from lrclib.net
 }
 
 /** A key: undefined keeps it, "" removes it, else the new key (checked by the server). */
@@ -296,6 +297,7 @@ export interface ExternalSettingsUpdate {
   fanartKey?: string;
   pictureSource?: string;
   musicbrainz?: boolean;
+  lrclib?: boolean;
 }
 
 export interface ArtistInfo {
@@ -418,6 +420,17 @@ export interface PluginLinks {
   links: AlbumLink[];
 }
 
+// --- lyrics -------------------------------------------------------------------
+
+export interface SongLyrics {
+  found: boolean;
+  unavailable: boolean; // LRCLIB could not be asked: try again later
+  source: "lrc" | "embedded" | "lrclib" | null;
+  synced: boolean; // lines have a start time
+  instrumental: boolean;
+  lines: { startMs: number | null; text: string }[];
+}
+
 // --- tag editor (admins) -----------------------------------------------------
 
 export interface AlbumTags {
@@ -492,6 +505,8 @@ export const api = {
   syncNewReleases: () => request<DiscographySync>("POST", "/manage/new-releases/sync"),
   getReleaseGroupLinks: (artistId: string, mbid: string) =>
     request<PluginLinks[]>("GET", `/artists/${artistId}/discography/${mbid}/links`),
+
+  getSongLyrics: (songId: string) => request<SongLyrics>("GET", `/songs/${songId}/lyrics`),
 
   getAlbumTags: (albumId: string) => request<AlbumTags>("GET", `/albums/${albumId}/tags`),
   setAlbumTags: (albumId: string, tags: AlbumTags) =>

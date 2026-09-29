@@ -1,4 +1,4 @@
-"""Manage Library (admins): import settings, browsing, imports and review, deletion."""
+"""Library Management (admins): import settings, browsing, imports and review, deletion."""
 
 import asyncio
 import os
@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import Field
 
 from app.api.deps import AdminCaller, ApiModel, DbSession
+from app.core.config import Settings
 from app.library_manager import deletion, files, imports, in_library, transcode
 from app.library_manager import status as library_state
 from app.library_manager.imports import ImportManager, ImportRequestError
@@ -155,7 +156,7 @@ class InLibraryOut(ApiModel):
 
 @router.get("/browse/in-library")
 async def browse_in_library(
-    _: AdminCaller, session: DbSession, path: str | None = None
+    request: Request, _: AdminCaller, session: DbSession, path: str | None = None
 ) -> list[InLibraryOut]:
     """The album folders (folders with audio files) of a listed folder that are already
     in the library. Separate from /browse, which stays fast: tags are read here."""
@@ -168,7 +169,9 @@ async def browse_in_library(
     except OSError as error:
         raise _bad_request(f"Cannot read {path or root}: {error.strerror or error}") from None
     folders = [Path(e.path) for e in listing if e.is_dir and e.audio_files]
-    found = await in_library.album_folders_in_library(session, folders)
+    settings: Settings = request.app.state.settings
+    cache = in_library.ResultCache(settings.data_dir / "cache" / "import-in-library.json")
+    found = await in_library.listed_folder_in_library(session, target, folders, cache)
     return [InLibraryOut(**vars(f)) for f in found]
 
 

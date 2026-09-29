@@ -1,4 +1,4 @@
-"""Library status (Manage Library, "Library" tab): the library against the tagger's own
+"""Library status (Library Management, "Library" tab): the library against the tagger's own
 database (beets), and the album folders that database does not know yet."""
 
 from dataclasses import dataclass, field

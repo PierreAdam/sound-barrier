@@ -1,7 +1,9 @@
-"""Manage Library API. Everything happens in temporary folders."""
+"""Library Management API. Everything happens in temporary folders."""
 
 import asyncio
+import os
 import shutil
+import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -13,6 +15,7 @@ from httpx import AsyncClient
 from sqlalchemy import update
 
 from app.core.db import Database
+from app.library_manager import in_library
 from app.library_manager.as_is import AsIsTagger
 from app.library_manager.tagger import (
     Candidate,
@@ -171,6 +174,32 @@ async def test_album_folders_already_in_the_library(
     ]
     outside = await admin_client.get("/api/manage/browse/in-library", params={"path": str(library)})
     assert outside.status_code == 403
+
+
+async def test_in_library_results_are_cached(
+    admin_client: AsyncClient,
+    inbox: Path,
+    library: Path,
+    db: Database,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    album_tracks(library, "Delain", "Dark Waters", 1)
+    await run_scan(db)
+    folder = inbox / "Delain - Dark Waters"
+    make_track(folder / "01", title="Track 1", artist="Delain", album="Dark Waters")
+    first = (await admin_client.get("/api/manage/browse/in-library")).json()
+    assert [f["album"] for f in first] == ["Dark Waters"]
+
+    reads: list[Path] = []
+    real = in_library.folder_tags
+    monkeypatch.setattr(in_library, "folder_tags", lambda f: reads.append(f) or real(f))
+    assert (await admin_client.get("/api/manage/browse/in-library")).json() == first
+    assert reads == []  # nothing read: the saved result
+    # A file more in the folder: computed again.
+    make_track(folder / "02", title="Track 2", artist="Delain", album="Dark Waters")
+    os.utime(folder, ns=(time.time_ns(), time.time_ns() + 1_000_000_000))
+    again = (await admin_client.get("/api/manage/browse/in-library")).json()
+    assert (again[0]["tracks"], reads) == (2, [folder])
 
 
 async def test_folders_imported_by_sound_barrier_are_in_the_library(

@@ -140,6 +140,16 @@ export class PlayerEngine {
 
   getSnapshot = (): PlayerSnapshot => this.snapshot;
 
+  /** The exact position in seconds (the snapshot's follows "timeupdate", ~4 times a second). */
+  get currentTime(): number {
+    return this.deck.currentTime;
+  }
+
+  /** Both audio elements (crossfade): the visualizer listens to them. */
+  get audioElements(): readonly AudioLike[] {
+    return this.decks;
+  }
+
   destroy(): void {
     this.cancelFade();
     this.decks.forEach((deck) => deck.pause());

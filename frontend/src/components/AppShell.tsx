@@ -5,6 +5,7 @@ import { useLibraryWatcher } from "../api/useLibraryWatcher";
 import { useAuth } from "../auth/AuthContext";
 import { PlayerProvider } from "../player/PlayerContext";
 import { PreferencesProvider } from "../preferences/PreferencesContext";
+import { NowPlaying, NowPlayingProvider } from "./NowPlaying";
 import { PlayerDock } from "./PlayerDock";
 import { SidePanel } from "./SidePanel";
 import { TopBar } from "./TopBar";
@@ -23,18 +24,21 @@ export function AppShell() {
   return (
     <PreferencesProvider>
       <PlayerProvider>
-        <LibraryWatcher />
-        <div className={`app${panelOpen ? " app--panel-open" : ""}`}>
-          <TopBar onToggleMenu={() => setPanelOpen((open) => !open)} />
-          <div className="app__body">
-            <SidePanel />
-            {panelOpen && <div className="app__backdrop" onClick={() => setPanelOpen(false)} />}
-            <main className="app__content">
-              <Outlet />
-            </main>
+        <NowPlayingProvider>
+          <LibraryWatcher />
+          <div className={`app${panelOpen ? " app--panel-open" : ""}`}>
+            <TopBar onToggleMenu={() => setPanelOpen((open) => !open)} />
+            <div className="app__body">
+              <SidePanel />
+              {panelOpen && <div className="app__backdrop" onClick={() => setPanelOpen(false)} />}
+              <main className="app__content">
+                <Outlet />
+              </main>
+            </div>
+            <NowPlaying />
+            <PlayerDock />
           </div>
-          <PlayerDock />
-        </div>
+        </NowPlayingProvider>
       </PlayerProvider>
     </PreferencesProvider>
   );

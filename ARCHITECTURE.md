@@ -510,6 +510,7 @@ never stored), created_at, expires_at (12 h, or 30 days with "remember me"), las
 | `GET /api/artists/{id}/discography/covers/{mbid}` | any user | cover of a release group, found automatically (Cover Art Archive, fanart.tv, Deezer) and kept in `<data>/discography-covers/` (no cover: retried after 30 days) |
 | `GET /api/plugins`, `PUT /api/plugins/{id}`, `POST /api/plugins/{id}/try`, `GET /api/plugins/{id}/assets/{name}` | admin | embedded plugins (`app/plugins/`, spec in `docs/specs/album-sources.md`): each declares its settings fields (rendered generically in Settings → Album search) and capabilities (`links`); settings in `server_setting` under `plugin:<id>`, files in `<data>/plugins/<id>/`. First plugin: "Search links" (GET / POST URL templates, icons fetched from public addresses only) |
 | `GET /api/artists/{id}/discography/{mbid}/links` | admin | the enabled plugins' links for a release group of the artist's discography (the "Missing albums" popup; POST links are submitted by the browser) |
+| `GET /api/songs/{id}/lyrics` | any user | lyrics of a song (`services/lyrics.py`): a `.lrc` next to the file, else the tags, else LRCLIB (switch in External services), synced ones first; LRCLIB answers kept in `<data>/lyrics/<song id>.json` (a "none" is asked again after 30 days; an unreachable LRCLIB is reported as `unavailable`, not remembered). Also served as `getLyrics` / `getLyricsBySongId` |
 | `GET /api/albums/{id}/cover-search?q=`, `GET /api/covers/thumbnail?url=`, `POST /api/albums/{id}/cover` | admin | album cover choice: search the cover sources (`app/external/covers.py`, Deezer for now; images only downloaded from each source's declared hosts), preview through the server, apply = `cover.jpg` written in the album's folders (previous one kept as `cover.previous.<ext>`) then a targeted scan. `getCoverArt` answers with an ETag and `no-cache`, so a changed cover shows at once |
 | `GET/PUT /api/albums/{id}/tags` | admin | tag editor: album fields (album, album artist, year, genre, compilation) and track fields (disc, number, title, artist); only changed fields are written, through beets for the files it knows (its database follows), then a targeted scan; returns the album's id afterwards (it changes when its name or artist does). A new year clears the month and day |
 | `POST /api/manage/cleanup` | admin | the daily cleanup now (`services/maintenance.py`): beets migration backups, beets entries without file, old import staging folders, resized covers older than 60 days, unused artist pictures |
@@ -531,7 +532,7 @@ Sound-Barrier replaces the `beet` command: all music management happens in the w
 [beets](https://beets.io) is used **as a Python library** inside the backend, never
 through its CLI. Users never edit a beets config file.
 
-### 9.0 What exists today (Manage Library page, admins)
+### 9.0 What exists today (Library Management page, admins)
 
 Code: `backend/app/library_manager/`, API `backend/app/api/manage.py`, UI
 `frontend/src/pages/ManageLibraryPage.tsx` + `pages/manage/`.
@@ -713,7 +714,7 @@ What is left, in order, and what was decided against: [ROADMAP.md](ROADMAP.md).
 |---|---|
 | A. Play music ✅ | `getArtist`, `getAlbum`, `getSong`, `stream` (range requests), `download`, `getCoverArt` (resized, cached); artist and album pages; player with queue, shuffle, repeat, crossfade |
 | B. Foundations | `/api` with web sessions, job table + worker process, targeted scans, move detection (9.5), settings storage |
-| C. Import inbox ✅ | analyze / review / apply with beets + MusicBrainz (9.3), settings page (9.2), adopt library (9.4, Manage Library → Library) |
+| C. Import inbox ✅ | analyze / review / apply with beets + MusicBrainz (9.3), settings page (9.2), adopt library (9.4, Library Management → Library) |
 | D. Packaging ✅ | Dockerfile, production compose file, web UI served by FastAPI |
 | E. Maintenance | album actions, reorganize, tag editor, upload to inbox |
 | F. Subsonic phases 2–4 | daily-use endpoints, folder browsing, transcoding (section 7) |

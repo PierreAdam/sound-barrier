@@ -207,6 +207,23 @@ class TopSongs(SubsonicModel):
     song: list[Child] = Field(default_factory=list[Child])
 
 
+class AlbumInfo(SubsonicModel):
+    """getAlbumInfo, getAlbumInfo2."""
+
+    notes: str | None = None
+    music_brainz_id: str | None = None
+    last_fm_url: str | None = None
+    small_image_url: str | None = None
+    medium_image_url: str | None = None
+    large_image_url: str | None = None
+
+
+class SimilarSongs(SubsonicModel):
+    """getSimilarSongs, getSimilarSongs2 (same shape)."""
+
+    song: list[Child] = Field(default_factory=list[Child])
+
+
 # --- folder browsing ---------------------------------------------------------
 
 
@@ -369,3 +386,43 @@ class User(SubsonicModel):
 
 class Users(SubsonicModel):
     user: list[User] = Field(default_factory=list[User])
+
+
+class ArtistInfo(SubsonicModel):
+    """getArtistInfo (folder browsing): similar artists are index folders."""
+
+    biography: str | None = None
+    music_brainz_id: str | None = None
+    last_fm_url: str | None = None
+    small_image_url: str | None = None
+    medium_image_url: str | None = None
+    large_image_url: str | None = None
+    similar_artist: list[Artist] = Field(default_factory=list[Artist])
+
+
+class Lyrics(SubsonicModel):
+    """getLyrics: plain text."""
+
+    artist: str | None = None
+    title: str | None = None
+    value: str | None = None
+
+
+class LyricsLine(SubsonicModel):
+    start: int | None = None  # milliseconds, synced lyrics only
+    value: str
+
+
+class StructuredLyrics(SubsonicModel):
+    """OpenSubsonic getLyricsBySongId."""
+
+    display_artist: str | None = None
+    display_title: str | None = None
+    lang: str = "xxx"  # unknown (ISO 639-2)
+    offset: int = 0
+    synced: bool
+    line: list[LyricsLine] = Field(default_factory=list[LyricsLine])
+
+
+class LyricsList(SubsonicModel):
+    structured_lyrics: list[StructuredLyrics] = Field(default_factory=list[StructuredLyrics])

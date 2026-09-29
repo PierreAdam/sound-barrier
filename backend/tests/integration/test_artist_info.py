@@ -44,6 +44,10 @@ class FakeServices:
                 return httpx.Response(200, json={"error": 6, "message": "not found"})
             if params["method"] == "artist.getInfo":
                 return httpx.Response(200, json=_lastfm_info())
+            if params["method"] == "album.getInfo":
+                wiki = {"summary": "Short.", "content": "The <i>first</i> album."}
+                url = "https://www.last.fm/music/Dethklok/The+Dethalbum"
+                return httpx.Response(200, json={"album": {"url": url, "wiki": wiki}})
             return httpx.Response(200, json=_lastfm_top_tracks())
         if request.url.host == "api.deezer.com":
             return httpx.Response(200, json=_deezer_search(params["q"]))
@@ -259,3 +263,55 @@ async def test_fanart_pictures(
     assert info["picture"]["pageUrl"] == f"https://fanart.tv/artist/{DETHKLOK_MBID}"
     downloads = [str(r.url) for r in services.requests if r.url.host == "assets.fanart.tv"]
     assert downloads == [FANART_THUMB]  # the most liked one
+
+
+async def test_album_info_and_similar_songs(
+    app: FastAPI,
+    admin: SubsonicUser,
+    user: SubsonicUser,
+    client: AsyncClient,
+    services: FakeServices,
+    dethklok: str,
+) -> None:
+    async with signed_in(app, admin) as web:
+        await web.put("/api/external/settings", json={"lastfmKey": GOOD_KEY})
+
+    async def call(endpoint: str, **params: str) -> dict[str, Any]:
+        response = await client.get(f"/rest/{endpoint}", params=user.params(**params))
+        data = response.json()["subsonic-response"]
+        assert data["status"] == "ok", data
+        return data
+
+    artist = (await call("getArtist", id=dethklok))["artist"]
+    album_id = artist["album"][0]["id"]
+    info = (await call("getAlbumInfo2", id=album_id))["albumInfo"]
+    assert info["notes"] == "The first album."
+    assert info["lastFmUrl"] == "https://www.last.fm/music/Dethklok/The+Dethalbum"
+    before = services.count("ws.audioscrobbler.com")
+    await call("getAlbumInfo2", id=album_id)  # cached
+    assert services.count("ws.audioscrobbler.com") == before
+
+    # Similar artists that are not in the library, on request.
+    similar = (await call("getArtistInfo2", id=dethklok, includeNotPresent="true"))["artistInfo2"]
+    assert [(a["name"], a["id"] == "-1") for a in similar["similarArtist"]] == [
+        ("Deaf Election", False),
+        ("Unknown Band", True),
+    ]
+
+    # Folder browsing: the artist's folder, and folders for the similar artists.
+    index = (await call("getIndexes"))["indexes"]["index"]
+    folders = {a["name"]: a["id"] for i in index for a in i["artist"]}
+    v1 = (await call("getArtistInfo", id=folders["Dethklok"]))["artistInfo"]
+    assert v1["lastFmUrl"] == "https://www.last.fm/music/Dethklok"
+    assert v1["similarArtist"] == [{"id": folders["Deaf Election"], "name": "Deaf Election"}]
+    directory = (await call("getMusicDirectory", id=folders["Dethklok"]))["directory"]
+    album_folder = directory["child"][0]["id"]
+    assert (await call("getAlbumInfo", id=album_folder))["albumInfo"]["notes"] == "The first album."
+
+    # The mix: Dethklok's songs and Deaf Election's (its similar artist in the library).
+    mix = (await call("getSimilarSongs2", id=dethklok, count="10"))["similarSongs2"]["song"]
+    assert {s["artist"] for s in mix} == {"Dethklok", "Deaf Election"}
+    assert len(mix) == 3  # all the songs there are
+    song_id = next(s["id"] for s in mix if s["artist"] == "Dethklok")
+    again = (await call("getSimilarSongs", id=song_id, count="2"))["similarSongs"]["song"]
+    assert len(again) == 2

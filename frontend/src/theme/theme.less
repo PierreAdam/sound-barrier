@@ -619,17 +619,11 @@ a {
   padding: 0 @space-5;
   border-bottom: 1px solid @color-border;
   background: @color-surface;
-  // Too narrow for everything: it scrolls sideways instead of squeezing its items.
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
+  // Its items collapse by its own width (see "Top bar: collapsing" below).
+  container: topbar / inline-size;
 
   > * {
     flex-shrink: 0;
-  }
-
-  &::-webkit-scrollbar {
-    height: 4px;
   }
 
   &__menu {
@@ -669,19 +663,52 @@ a {
 
   &__user {
     display: flex;
+    flex-shrink: 1;
     align-items: center;
     gap: @space-3;
+    min-width: 0;
     margin-left: auto;
+
+    .search-box {
+      flex-shrink: 1;
+      min-width: 110px;
+    }
   }
 
-  // Username + icon, links to the account page.
+  // The main links in one menu: only when they do not fit.
+  &__nav-menu {
+    display: none;
+  }
+
+  &__nav-button {
+    display: inline-flex;
+    align-items: center;
+    gap: @space-1;
+    border: 0;
+    background: @color-surface-raised;
+    color: @color-text;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  &__chevron {
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+  }
+
+  // Icon + username: opens the user menu.
   &__account {
     display: inline-flex;
     align-items: center;
     gap: @space-2;
     padding: @space-2 @space-3;
+    border: 0;
     border-radius: @radius-sm;
+    background: transparent;
     color: @color-text;
+    font: inherit;
+    cursor: pointer;
     transition: background @transition, color @transition;
 
     .icon {
@@ -692,7 +719,7 @@ a {
       background: @color-surface-hover;
     }
 
-    &--active {
+    &.dropdown__button--open {
       background: @color-surface-raised;
 
       .icon {
@@ -789,42 +816,14 @@ a {
   }
 }
 
-// Side panel: page links, artist index, letter bar ---------------------------
+// Side panel: artist index, letter bar -----------------------------------------
 
 .sidepanel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   min-height: 0;
   border-right: 1px solid @color-border;
   background: @color-surface;
-
-  &__pages {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: @space-3;
-    border-bottom: 1px solid @color-border;
-  }
-
-  &__page {
-    display: flex;
-    align-items: center;
-    gap: @space-3;
-    padding: @space-2 @space-3;
-    border-radius: @radius-sm;
-    color: @color-text-muted;
-    transition: background @transition, color @transition;
-
-    &:hover {
-      background: @color-surface-hover;
-      color: @color-text;
-    }
-
-    &--active {
-      background: @color-surface-raised;
-      color: @color-text;
-    }
-  }
 
   &__artists {
     overflow-y: auto;
@@ -1300,7 +1299,19 @@ a {
   }
 }
 
-// Manage Library → New releases: the same cards and filter as "Missing albums".
+@keyframes pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser__analyzing {
+    animation: none;
+  }
+}
+
+// Library Management → New releases: the same cards and filter as "Missing albums".
 .new-releases {
   display: flex;
   flex-direction: column;
@@ -2282,7 +2293,7 @@ select.field__input {
   }
 }
 
-// Manage Library, "Library" tab ---------------------------------------------
+// Library Management, "Library" tab ---------------------------------------------
 
 .library-status {
   display: grid;
@@ -2568,7 +2579,7 @@ select.field__input {
 }
 
 // ---------------------------------------------------------------------------
-// Manage Library: tabs, folder browser, imports, review, deletion
+// Library Management: tabs, folder browser, imports, review, deletion
 // ---------------------------------------------------------------------------
 
 .notice {
@@ -2674,6 +2685,16 @@ select.field__input {
 
   &__in-library + &__date {
     margin-left: 0;
+  }
+
+  // While the "In library" badges are being computed.
+  &__analyzing {
+    margin-left: auto;
+    animation: pulse 1.4s ease-in-out infinite;
+
+    & + .browser__sort {
+      margin-left: 0;
+    }
   }
 
   &__sort {
@@ -3171,6 +3192,8 @@ select.field__input {
 
 .player {
   position: relative;
+  // Its controls collapse by the bar's own width (see "Player bar: collapsing" below).
+  container: player / inline-size;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
@@ -3245,6 +3268,36 @@ select.field__input {
     border-radius: @radius-sm;
   }
 
+  // The cover opens "Now playing".
+  &__cover-button {
+    flex: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+
+    &:disabled {
+      cursor: default;
+    }
+
+    &:focus-visible {
+      outline: 2px solid @color-focus;
+      border-radius: @radius-sm;
+    }
+  }
+
+  // Right of the title (the track column has room; the right one does not).
+  &__visualizer {
+    width: 96px;
+    height: 32px;
+    flex: none;
+    margin-left: auto;
+
+    @media (max-width: @breakpoint-narrow) {
+      display: none;
+    }
+  }
+
   &__meta {
     display: flex;
     flex-direction: column;
@@ -3282,6 +3335,12 @@ select.field__input {
     align-items: center;
     justify-content: flex-end;
     gap: @space-3;
+    min-width: 0;
+  }
+
+  // Shown once some controls collapse (they are all in its menu).
+  &__more {
+    display: none;
   }
 
   &__crossfade-seconds {
@@ -3365,22 +3424,12 @@ select.field__input {
       padding: @space-2;
     }
 
-    &__username,
-    &__user .badge {
-      display: none;
-    }
   }
 
   .player {
     grid-template-columns: minmax(0, 1fr) auto auto;
     gap: @space-2;
     padding: 0 @space-3;
-
-    // Keep play / next and the queue button (the only way to open the queue on touch).
-    &__right > :not(.player__queue),
-    &__controls .icon-button:not(.icon-button--primary):not([aria-label="Next"]) {
-      display: none;
-    }
 
     &__cover {
       width: 48px;
@@ -3429,5 +3478,314 @@ select.field__input {
     &__tracks td:nth-child(n + 4):not(.tracks__duration) {
       display: none;
     }
+  }
+}
+
+// Visualizer (canvas): bars drawn in its CSS color ---------------------------
+
+.visualizer {
+  display: block;
+  color: @color-accent;
+}
+
+// "Now playing": big cover, visualizer and lyrics, over the page content ------
+
+.now-playing {
+  position: fixed;
+  z-index: 25;
+  inset: @topbar-height 0 @player-height 0;
+  padding: @space-6;
+  background: @color-bg;
+
+  &__close {
+    position: absolute;
+    top: @space-3;
+    right: @space-4;
+    font-size: @font-size-xl;
+  }
+
+  &__body {
+    display: grid;
+    grid-template-columns: minmax(240px, 420px) minmax(0, 1fr);
+    gap: @space-6;
+    height: 100%;
+    max-width: 1300px;
+    margin: 0 auto;
+  }
+
+  &__side {
+    display: flex;
+    flex-direction: column;
+    gap: @space-4;
+    min-height: 0;
+  }
+
+  &__cover {
+    width: 100%;
+    border-radius: @radius-md;
+    box-shadow: @shadow-card;
+  }
+
+  &__title {
+    font-size: @font-size-xl;
+    font-weight: 700;
+  }
+
+  &__artist {
+    color: @color-text-muted;
+
+    a:hover {
+      color: @color-accent;
+    }
+  }
+
+  &__visualizer {
+    width: 100%;
+    height: 110px;
+    margin-top: auto;
+  }
+
+  &__lyrics {
+    overflow-y: auto;
+    height: 100%;
+    padding: 30vh @space-4 30vh 0;
+    mask-image: linear-gradient(transparent, #000 15%, #000 85%, transparent);
+  }
+
+  &__empty {
+    text-align: center;
+  }
+
+  @media (max-width: @breakpoint-narrow) {
+    padding: @space-4;
+
+    &__body {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: @space-4;
+    }
+
+    &__side {
+      flex-direction: row;
+      align-items: center;
+    }
+
+    &__cover {
+      width: 96px;
+    }
+
+    &__visualizer {
+      display: none;
+    }
+  }
+}
+
+.lyrics {
+  display: flex;
+  flex-direction: column;
+  gap: @space-2;
+  margin: 0;
+  padding: 0;
+  color: @color-text;
+  font-size: @font-size-lg;
+  line-height: 1.5;
+  list-style: none;
+
+  &--synced &__line {
+    color: @color-text-muted;
+    transition: color @transition, transform @transition;
+  }
+
+  &__line--past {
+    opacity: 0.7;
+  }
+
+  &--synced &__line--active {
+    color: @color-text;
+    font-weight: 700;
+    transform: scale(1.03);
+    transform-origin: left center;
+  }
+
+  &__seek {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      color: @color-accent;
+    }
+  }
+}
+
+// Player bar: collapsing -------------------------------------------------------
+// When the bar gets narrow, its controls go, least useful first; the "⋯" menu then
+// holds all of them (time, shuffle, repeat, crossfade, visualizer, volume).
+
+@container player (max-width: 1180px) {
+  .player__volume .slider {
+    display: none;
+  }
+
+  .player__more {
+    display: inline-flex;
+  }
+}
+
+@container player (max-width: 1020px) {
+  .player__time,
+  .player__crossfade,
+  .player__visualizer-toggle,
+  .player__visualizer {
+    display: none;
+  }
+}
+
+@container player (max-width: 860px) {
+  .player__shuffle,
+  .player__repeat {
+    display: none;
+  }
+}
+
+// Phones: play / next, the queue (the only way to open it on touch), "Now playing" and "⋯".
+@container player (max-width: 640px) {
+  .player__volume,
+  .player__previous {
+    display: none;
+  }
+
+  .player__right {
+    gap: @space-1;
+  }
+}
+
+// Menus opened by a button (Dropdown.tsx): top bar, player "⋯" -----------------
+
+.dropdown {
+  position: relative;
+  align-items: center;
+
+  &__panel {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + @space-2);
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 200px;
+    padding: @space-2;
+    border: 1px solid @color-border;
+    border-radius: @radius-md;
+    background: @color-surface-raised;
+    box-shadow: @shadow-panel;
+
+    &--up {
+      top: auto;
+      bottom: calc(100% + @space-3);
+    }
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: @space-2;
+    margin: 0 0 @space-1;
+    padding: @space-1 @space-2 @space-2;
+    border-bottom: 1px solid @color-border;
+  }
+
+  &__name {
+    font-weight: 600;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: @space-2;
+    width: 100%;
+    padding: @space-2;
+    border: 0;
+    border-radius: @radius-sm;
+    background: transparent;
+    color: @color-text;
+    font: inherit;
+    font-size: @font-size-sm;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover {
+      background: @color-surface-hover;
+    }
+
+    &--active {
+      color: @color-accent;
+    }
+
+    &--separated {
+      margin-top: @space-1;
+      border-top: 1px solid @color-border;
+      border-radius: 0 0 @radius-sm @radius-sm;
+    }
+  }
+}
+
+// The nav menu opens under its button, on the left.
+.topbar__nav-menu .dropdown__panel {
+  right: auto;
+  left: 0;
+}
+
+.player-menu {
+  &__time {
+    margin: 0 0 @space-1;
+    padding: 0 @space-2;
+    color: @color-text-muted;
+    font-size: @font-size-sm;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__volume {
+    display: flex;
+    align-items: center;
+    gap: @space-2;
+    padding: @space-2;
+    color: @color-text-muted;
+  }
+}
+
+// Top bar: collapsing -----------------------------------------------------------
+
+@container topbar (max-width: 1020px) {
+  .topbar__nav {
+    display: none;
+  }
+
+  .topbar__nav-menu {
+    display: flex;
+  }
+}
+
+// Phones: only the user icon.
+@container topbar (max-width: 560px) {
+  .topbar__username {
+    display: none;
+  }
+
+  .topbar__user {
+    gap: @space-2;
+  }
+}
+
+// Small phones: the logo goes too (the side panel button and the page menu stay).
+@container topbar (max-width: 340px) {
+  .topbar__brand {
+    display: none;
   }
 }

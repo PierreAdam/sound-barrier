@@ -41,7 +41,7 @@ Decisions taken on what is left to do (2026-09-28). The design of what exists is
 1. ✅ **Login throttling** (10 failures in 15 minutes, configurable): after N failed sign-ins from one IP address (web UI or Subsonic
    API), that address is refused for a while.
 2. ✅ **Scheduled cleanups** (10 minutes after start, then daily; "Clean up now" in
-   Manage Library → Library): beets' leftover database backups (`library.db-before-*.bak`),
+   Library Management → Library): beets' leftover database backups (`library.db-before-*.bak`),
    beets entries whose file is gone, abandoned import staging folders, old cached covers.
 
 ### 5. Discography
@@ -55,17 +55,35 @@ Decisions taken on what is left to do (2026-09-28). The design of what exists is
    [docs/specs/album-sources.md](docs/specs/album-sources.md)): embedded plugins with their
    own settings; the first one gives admins search links (GET or POST, icons) for missing
    albums.
-3. **New releases** (Manage Library): recent (1 to 12 months) and upcoming releases of
+3. **New releases** (Library Management): recent (1 to 12 months) and upcoming releases of
    every album artist that the library does not have, from their MusicBrainz discographies
    refreshed daily by a background job (progress shown on the page).
 
+### 6. Apps and listening
+
+1. ✅ **Info endpoints**: `getArtistInfo` (folder ids), `getAlbumInfo`/`getAlbumInfo2` (Last.fm
+   album notes, cached), `getSimilarSongs`/`getSimilarSongs2` ("instant mix": the artist and
+   its similar artists of the library, else its genre), `includeNotPresent` in
+   `getArtistInfo2`. Image URLs are not given (they would need unauthenticated links;
+   apps get artist pictures through `coverArt`).
+2. ✅ **Lyrics**: `.lrc` files, the files' tags, then LRCLIB (cached in the data folder);
+   `getLyrics`, `getLyricsBySongId` (OpenSubsonic `songLyrics`); in the web UI a "Now
+   playing" view (player bar button or cover) with synced lyrics following the song
+   (click a line to jump there) and a frequency visualizer; a small visualizer can also
+   show in the player bar.
+3. **Import page**: "Analyzing…" while the "In library" badges are computed; results
+   kept a day (data folder) unless the folders or the library change.
+
 ## Maybe later
 
+- **Bookmarks** (`getBookmarks`, `createBookmark`, `deleteBookmark`), for podcasts and
+  audiobooks rather than music.
+- **Equalizer** (web UI only): 10 bands on the Web Audio graph of the visualizer.
 - **Moved / renamed files keep their user data** (play counts, stars, playlists): today a
   moved file is a new song (ARCHITECTURE.md 9.5).
 - **Split multiple artists** packed in one tag ("A, B", "A feat. B"); beets already puts
   compilations under `Compilations/`.
-- Bookmarks, lyrics (`getLyrics`, `getLyricsBySongId`), avatars (`getAvatar`).
+- Avatars (`getAvatar`).
 - Reorganize the library to beets' path formats; upload music to the import folder from
   the web UI.
 
@@ -75,6 +93,6 @@ Decisions taken on what is left to do (2026-09-28). The design of what exists is
   to MP3 at import time instead.
 - **Album download** (zip) in the web UI.
 - **Taking over the previous beets database** (`music.db`): Sound-Barrier maintains its
-  own beets database (adopt library albums from Manage Library → Library).
+  own beets database (adopt library albums from Library Management → Library).
 - **Backups** of the database and secret key: handled on the server side.
 - Podcasts, internet radio, shares, jukebox, video.

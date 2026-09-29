@@ -118,7 +118,22 @@ export function ExternalSection() {
             )
           }
         />
-        Look up artist discographies on MusicBrainz ("Missing albums" on artist pages, no key needed; kept 7 days)
+        Look up artist discographies on MusicBrainz ("Missing albums" on artist pages, no key needed; kept a day)
+      </label>
+
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={settings.lrclib}
+          disabled={busy}
+          onChange={(e) =>
+            void save(
+              { lrclib: e.target.checked },
+              e.target.checked ? "LRCLIB lyrics turned on." : "LRCLIB lyrics turned off.",
+            )
+          }
+        />
+        Look up song lyrics on LRCLIB when the files have none (synced lyrics, no key needed; kept on the server)
       </label>
       {message && <p className={message.ok ? "text-success" : "text-error"}>{message.text}</p>}
     </section>

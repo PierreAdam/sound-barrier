@@ -44,7 +44,7 @@ export function ManageLibraryPage() {
   return (
     <div className="page manage">
       <div className="page__header">
-        <h1 className="page__title">Manage Library</h1>
+        <h1 className="page__title">Library Management</h1>
         {settings && <span className="text-muted">Tagging: {settings.tagger}</span>}
       </div>
       {settings && !settings.matching && (
@@ -54,7 +54,7 @@ export function ManageLibraryPage() {
       )}
       {settingsError && <p className="text-error">{settingsError}</p>}
 
-      <nav className="tabs" role="tablist" aria-label="Manage Library">
+      <nav className="tabs" role="tablist" aria-label="Library Management">
         {tabs.map((t) => (
           <button
             key={t.id}

@@ -1,4 +1,4 @@
-"""Import jobs (Manage Library page). The matching itself is done by a Tagger (see
+"""Import jobs (Library Management page). The matching itself is done by a Tagger (see
 app/library_manager): these tables only record what was found and what was decided."""
 
 import uuid

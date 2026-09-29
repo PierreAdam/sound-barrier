@@ -34,7 +34,7 @@ from app.services import artist_info, browsing, server_settings
 
 logger = logging.getLogger(__name__)
 
-REFRESH_AFTER = timedelta(days=1)  # new releases (Manage Library) are checked daily
+REFRESH_AFTER = timedelta(days=1)  # new releases (Library Management) are checked daily
 RETRY_AFTER = timedelta(days=1)  # after a failure
 RELEASE_LOOKUPS = 10  # release ids resolved per request at most (one second each)
 COVER_RETRY_AFTER = timedelta(days=30)  # when no source had a cover

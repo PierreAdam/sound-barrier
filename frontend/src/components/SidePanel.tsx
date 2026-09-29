@@ -1,44 +1,22 @@
 import { NavLink } from "react-router-dom";
 
 import { useSubsonic } from "../api/useSubsonic";
-import { useSession } from "../auth/AuthContext";
-import { LibraryIcon, SettingsIcon } from "./Icons";
-
-const PAGES = [
-  { to: "/manage", label: "Manage Library", icon: <LibraryIcon />, adminOnly: true },
-  { to: "/settings", label: "Settings", icon: <SettingsIcon />, adminOnly: true },
-];
 
 /** DOM id of a letter group in the side panel ("#" is not usable in an id selector). */
 function letterId(letter: string): string {
   return `side-letter-${letter === "#" ? "other" : letter}`;
 }
 
-/** Left panel: page links on top, then the artist index (like Subsonic). */
+/**
+ * Left panel: the artist index (like Subsonic), with letters to jump to. The admin pages
+ * (Settings, Library Management) are in the user menu of the top bar.
+ */
 export function SidePanel() {
-  const { user } = useSession();
   const { data, error } = useSubsonic("getArtists");
   const index = data?.artists.index ?? [];
-  // Regular users have no page here (admin pages only): no empty block above the artists.
-  const pages = PAGES.filter((page) => user.adminRole || !page.adminOnly);
 
   return (
     <aside className="sidepanel">
-      {pages.length > 0 && (
-        <nav className="sidepanel__pages" aria-label="Pages">
-          {pages.map((page) => (
-            <NavLink
-              key={page.to}
-              to={page.to}
-              className={({ isActive }) => `sidepanel__page${isActive ? " sidepanel__page--active" : ""}`}
-            >
-              {page.icon}
-              <span>{page.label}</span>
-            </NavLink>
-          ))}
-        </nav>
-      )}
-
       <div className="sidepanel__artists" aria-label="Artists">
         {error && <p className="text-error sidepanel__message">{error.message}</p>}
         {data && index.length === 0 && <p className="text-muted sidepanel__message">No artists yet.</p>}

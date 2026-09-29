@@ -38,7 +38,7 @@ src/
 ├── pages/        Home, Browse (index), Artist, Album, About,
 │                 Account (everyone, from the username in the top bar): account/ (password, player),
 │                 Settings (admins only): settings/ (library + scan progress, schedule, users),
-│                 Manage Library (admins only): manage/ (import + browser, review, delete)
+│                 Library Management (admins only): manage/ (import + browser, review, delete)
 └── theme/        theme.less: every style, design tokens at the top
 ```
 

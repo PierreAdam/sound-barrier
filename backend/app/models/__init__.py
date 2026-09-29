@@ -1,5 +1,5 @@
 from app.models.base import Base
-from app.models.external import ArtistInfo
+from app.models.external import AlbumInfo, ArtistInfo
 from app.models.imports import ImportJob, ImportTask
 from app.models.library import (
     Album,
@@ -38,6 +38,7 @@ __all__ = [
     "AlbumAnnotation",
     "AlbumArtist",
     "AlbumGenre",
+    "AlbumInfo",
     "ApiKey",
     "AppUser",
     "Artist",
