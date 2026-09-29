@@ -1,4 +1,5 @@
-"""Our own JSON API (`/api`), used only by the web UI, for what Subsonic does not cover."""
+"""Our own JSON API (`/api`), used by the web UI (and the transcription workers,
+`api/transcripts.py`) for what Subsonic does not cover."""
 
 from fastapi import APIRouter
 
@@ -16,6 +17,7 @@ from app.api import (
     queue,
     spoken,
     tags,
+    transcripts,
 )
 
 
@@ -34,4 +36,6 @@ def build_router() -> APIRouter:
     router.include_router(discography.router)
     router.include_router(plugins.router)
     router.include_router(tags.router)
+    router.include_router(transcripts.worker_router)
+    router.include_router(transcripts.admin_router)
     return router

@@ -5,6 +5,7 @@ export const SETTINGS_TABS = [
   { id: "import", label: "Import" },
   { id: "external", label: "External services" },
   { id: "album-search", label: "Album search" },
+  { id: "transcripts", label: "Transcripts" },
   { id: "users", label: "Users" },
 ] as const;
 

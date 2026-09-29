@@ -1,0 +1,7 @@
+# Made by install.ps1 and at run time: see src/sb_transcriber/config.py
+/env/
+/.venv/
+/models/
+/work/
+# The worker token
+/config.toml

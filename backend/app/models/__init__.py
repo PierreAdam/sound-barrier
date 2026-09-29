@@ -16,6 +16,7 @@ from app.models.library import (
     SongGenre,
 )
 from app.models.system import Scan, ServerSetting
+from app.models.transcripts import Transcript, WorkerToken
 from app.models.userdata import (
     AlbumAnnotation,
     ArtistAnnotation,
@@ -67,7 +68,9 @@ __all__ = [
     "SongAnnotation",
     "SongArtist",
     "SongGenre",
+    "Transcript",
     "UserMusicFolder",
     "WebPlayQueue",
     "WebSession",
+    "WorkerToken",
 ]

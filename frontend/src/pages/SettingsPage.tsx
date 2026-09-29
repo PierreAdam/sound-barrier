@@ -8,6 +8,7 @@ import { PluginsSection } from "./settings/PluginsSection";
 import { ScheduleSection } from "./settings/ScheduleSection";
 import { SpokenSection } from "./settings/SpokenSection";
 import { SETTINGS_TABS as TABS } from "./settings/tabs";
+import { TranscriptsSection } from "./settings/TranscriptsSection";
 import { UsersSection } from "./settings/UsersSection";
 
 /**
@@ -47,6 +48,7 @@ export function SettingsPage() {
       {tab === "import" && <ImportSection />}
       {tab === "external" && <ExternalSection />}
       {tab === "album-search" && <PluginsSection />}
+      {tab === "transcripts" && <TranscriptsSection />}
       {tab === "users" && <UsersSection />}
     </div>
   );

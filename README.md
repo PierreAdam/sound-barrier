@@ -46,6 +46,11 @@ command line, no config files to edit.
 - Adopt existing library albums into beets, clean up missing entries, delete albums
   and songs.
 
+**Transcripts** (podcasts and audiobooks)
+- Speech to text with Whisper on a PC with an NVIDIA GPU: the companion app
+  [`transcriber/`](transcriber/README.md) signs in with a worker token, takes the files that
+  have no text and sends it back; shown like synced lyrics, also written as `.lrc` files.
+
 **Deployment**
 - A single Docker image (backend + web UI + ffmpeg) on one port, next to PostgreSQL.
 - Runs as an unprivileged user; migrations applied automatically on start.

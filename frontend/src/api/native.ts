@@ -529,11 +529,58 @@ export interface PluginLinks {
 export interface SongLyrics {
   found: boolean;
   unavailable: boolean; // LRCLIB could not be asked: try again later
-  source: "lrc" | "embedded" | "lrclib" | null;
+  source: "lrc" | "embedded" | "transcript" | "lrclib" | null; // transcript: speech to text
   synced: boolean; // lines have a start time
   instrumental: boolean;
   // words: word by word timing ("enhanced LRC"), when the lyrics have it
   lines: { startMs: number | null; text: string; words: { startMs: number; text: string }[] | null }[];
+}
+
+// --- transcripts (speech to text, by the companion app `transcriber/`) ----------
+
+export interface WorkerToken {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export interface TranscriptBook {
+  id: string;
+  kind: SpokenKind;
+  title: string;
+  author: string;
+  coverArt: string | null;
+  files: number;
+  durationMs: number;
+  done: number;
+  working: number;
+  failed: number;
+  pending: number;
+}
+
+export interface TranscriptWork {
+  songId: string;
+  albumId: string;
+  book: string;
+  title: string;
+  worker: string | null;
+  progress: number; // 0..1
+  startedAt: string;
+  updatedAt: string;
+}
+
+export interface TranscriptFile {
+  id: string;
+  title: string;
+  fileName: string;
+  durationMs: number;
+  size: number;
+  status: "pending" | "working" | "done" | "failed";
+  progress: number;
+  worker: string | null;
+  error: string | null;
+  updatedAt: string | null;
 }
 
 // --- podcasts and audiobooks ----------------------------------------------------
@@ -716,4 +763,16 @@ export const api = {
     request<KindHint[]>("GET", `/manage/browse/kinds${path ? `?path=${encodeURIComponent(path)}` : ""}`),
   deleteMusic: (albumIds: string[], songIds: string[]) =>
     request<DeleteResult>("POST", "/manage/delete", { albumIds, songIds }),
+
+  // Transcripts (admins)
+  getWorkerTokens: () => request<WorkerToken[]>("GET", "/transcripts/tokens"),
+  /** The secret is only in this answer. */
+  createWorkerToken: (name: string) =>
+    request<{ token: WorkerToken; secret: string }>("POST", "/transcripts/tokens", { name }),
+  revokeWorkerToken: (id: string) => request<void>("DELETE", `/transcripts/tokens/${id}`),
+  getTranscripts: () => request<{ books: TranscriptBook[]; working: TranscriptWork[] }>("GET", "/transcripts"),
+  getTranscriptBook: (albumId: string) =>
+    request<{ book: TranscriptBook; files: TranscriptFile[] }>("GET", `/transcripts/books/${albumId}`),
+  removeTranscripts: (albumId: string) => request<{ count: number }>("DELETE", `/transcripts/books/${albumId}`),
+  retryTranscripts: (albumId: string) => request<{ count: number }>("POST", `/transcripts/books/${albumId}/retry`),
 };

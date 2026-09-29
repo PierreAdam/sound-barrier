@@ -16,7 +16,12 @@ const SCROLL_EASING_MS = 220;
 const MS_PER_CHARACTER = 85;
 const MIN_LINE_MS = 1200;
 const LAST_LINE_MS = 5000;
-const SOURCES: Record<string, string> = { lrc: "a .lrc file", embedded: "the file's tags", lrclib: "LRCLIB" };
+const SOURCES: Record<string, string> = {
+  lrc: "a .lrc file",
+  embedded: "the file's tags",
+  transcript: "a transcript (speech to text)",
+  lrclib: "LRCLIB",
+};
 
 type Lines = SongLyrics["lines"];
 
@@ -53,12 +58,22 @@ function timedWords(lines: Lines, index: number): TimedWord[] {
 
 const cache = new Map<string, SongLyrics>();
 
+/** The lyrics of a song, kept for the session (except when LRCLIB could not be asked). */
+export function loadLyrics(songId: string): Promise<SongLyrics> {
+  const cached = cache.get(songId);
+  if (cached) return Promise.resolve(cached);
+  return api.getSongLyrics(songId).then((found) => {
+    if (!found.unavailable) cache.set(songId, found); // else asked again next time
+    return found;
+  });
+}
+
 /**
  * The song's lyrics. Synced ones follow the song: the view glides so the current line
  * stays in the middle, lines fade with their distance to it, and (option) the current
  * line fills word by word with a small cursor.
  */
-export function Lyrics({ songId }: { songId: string }) {
+export function Lyrics({ songId, emptyText = "No lyrics found for this song." }: { songId: string; emptyText?: string }) {
   const { engine } = usePlayer();
   const { preferences, update } = usePreferences();
   const karaoke = preferences?.lyrics.karaoke ?? false;
@@ -76,12 +91,8 @@ export function Lyrics({ songId }: { songId: string }) {
     setError(null);
     setActive(-1);
     if (cache.has(songId)) return;
-    api
-      .getSongLyrics(songId)
-      .then((found) => {
-        if (!found.unavailable) cache.set(songId, found); // else asked again next time
-        if (!cancelled) setLyrics(found);
-      })
+    loadLyrics(songId)
+      .then((found) => !cancelled && setLyrics(found))
       .catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
     return () => {
       cancelled = true;
@@ -143,7 +154,7 @@ export function Lyrics({ songId }: { songId: string }) {
     return <p className="text-muted now-playing__lyrics">The lyrics service (LRCLIB) is not reachable right now: try again later.</p>;
   }
   if (!lyrics.found || (!lyrics.lines.length && !lyrics.instrumental)) {
-    return <p className="text-muted now-playing__lyrics">No lyrics found for this song.</p>;
+    return <p className="text-muted now-playing__lyrics">{emptyText}</p>;
   }
   if (lyrics.instrumental && !lyrics.lines.length) {
     return <p className="text-muted now-playing__lyrics">Instrumental.</p>;

@@ -2,10 +2,11 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useR
 import { Link, useLocation } from "react-router-dom";
 
 import { formatTime } from "../format";
+import type { Track } from "../player/engine";
 import { usePlayer } from "../player/PlayerContext";
 import { albumUrl, artistUrl } from "../player/tracks";
 import { CoverArt } from "./CoverArt";
-import { Lyrics } from "./Lyrics";
+import { loadLyrics, Lyrics } from "./Lyrics";
 import { Visualizer } from "./Visualizer";
 
 interface NowPlayingValue {
@@ -70,13 +71,57 @@ export function NowPlaying() {
             </div>
             <Visualizer className="now-playing__visualizer" bars={40} />
           </div>
-          {/* No lyrics for podcasts and audiobooks: their chapters, if the file has some. */}
-          {current.longForm ? <Chapters /> : <Lyrics songId={current.id} />}
+          {current.longForm ? <Spoken track={current} /> : <Lyrics songId={current.id} />}
         </div>
       ) : (
         <p className="text-muted now-playing__empty">Nothing playing.</p>
       )}
     </section>
+  );
+}
+
+/**
+ * Podcasts and audiobooks: their text (a transcript, Settings → Transcripts) and the chapters
+ * inside the file, with a switch when there are both. Chapters first when there is no text.
+ */
+function Spoken({ track }: { track: Track }) {
+  const [hasText, setHasText] = useState<boolean | null>(null);
+  const [view, setView] = useState<"text" | "chapters">("text");
+  const hasChapters = Boolean(track.chapters?.length);
+
+  useEffect(() => {
+    let current = true;
+    setHasText(null);
+    setView("text");
+    loadLyrics(track.id)
+      .then((found) => current && setHasText(found.found && found.lines.length > 0))
+      .catch(() => current && setHasText(false));
+    return () => {
+      current = false;
+    };
+  }, [track.id]);
+
+  if (!hasChapters) return <Lyrics songId={track.id} emptyText="No text for this file yet." />;
+  if (hasText === null) return <div />;
+  if (!hasText) return <Chapters />;
+  return (
+    <div className="now-playing__spoken">
+      <div className="now-playing__views" role="tablist" aria-label="Show">
+        {(["text", "chapters"] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={view === id}
+            className={`now-playing__view${view === id ? " now-playing__view--active" : ""}`}
+            onClick={() => setView(id)}
+          >
+            {id === "text" ? "Text" : "Chapters"}
+          </button>
+        ))}
+      </div>
+      {view === "text" ? <Lyrics songId={track.id} /> : <Chapters />}
+    </div>
   );
 }
 

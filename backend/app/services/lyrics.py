@@ -2,9 +2,10 @@
 getLyricsBySongId.
 
 Sources, best first: a `.lrc` file next to the song, lyrics in the file's tags (plain, or
-LRC text), then LRCLIB (online, when allowed in Settings). Synced lyrics win over plain
-ones. LRCLIB's answers (also "none") are kept in the data folder (`lyrics/<song id>.json`):
-the files of the library are never written.
+LRC text), the transcript of a podcast episode / audiobook file (services/transcripts.py,
+with the timing of each word), then LRCLIB (online, when allowed in Settings; music only).
+Synced lyrics win over plain ones. LRCLIB's answers (also "none") are kept in the data
+folder (`lyrics/<song id>.json`). Only transcripts write into the library (their `.lrc`).
 """
 
 import asyncio
@@ -23,13 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.external import ExternalServiceError, lrclib
 from app.models import Album, MusicFolder, Song
 from app.scanner.tags import read_audio_file
-from app.services import server_settings
+from app.services import music_folders, server_settings, transcripts
 
 logger = logging.getLogger(__name__)
 
 RETRY_AFTER = timedelta(days=30)  # LRCLIB had nothing, or failed: asked again after that
-_TIMESTAMP = re.compile(r"\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]")
-_WORD_STAMP = re.compile(r"<(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?>")  # enhanced LRC
+_TIMESTAMP = re.compile(r"\[(\d{1,4}):(\d{1,2})(?:[.:](\d{1,3}))?\]")
+_WORD_STAMP = re.compile(r"<(\d{1,4}):(\d{1,2})(?:[.:](\d{1,3}))?>")  # enhanced LRC
 _OFFSET = re.compile(r"^\[offset:\s*([+-]?\d+)\]\s*$", re.IGNORECASE | re.MULTILINE)
 _TAG_LINE = re.compile(r"^\[[a-z]+:.*\]\s*$", re.IGNORECASE)  # [ar:...], [ti:...]
 
@@ -49,7 +50,7 @@ class Line:
 
 @dataclass
 class SongLyrics:
-    source: str  # "lrc", "embedded", "lrclib"
+    source: str  # "lrc", "embedded", "transcript", "lrclib"
     synced: bool
     lines: list[Line] = field(default_factory=list[Line])
     instrumental: bool = False
@@ -112,14 +113,16 @@ def parse(text: str) -> tuple[bool, list[Line]]:
 
 
 def _local(path: Path) -> list[SongLyrics]:
-    """The lyrics found with the file: its `.lrc`, its tags."""
+    """The lyrics found with the file: its `.lrc` (maybe a transcript's), its tags."""
     found: list[SongLyrics] = []
     sidecar = path.with_suffix(".lrc")
     if sidecar.is_file():
         try:
-            synced, lines = parse(sidecar.read_text("utf-8", errors="replace"))
+            text = sidecar.read_text("utf-8", errors="replace")
+            synced, lines = parse(text)
             if lines:
-                found.append(SongLyrics("lrc", synced, lines))
+                source = "transcript" if transcripts.LRC_MARKER in text[:4096] else "lrc"
+                found.append(SongLyrics(source, synced, lines))
         except OSError as error:
             logger.warning("Cannot read %s: %s", sidecar, error)
     audio = read_audio_file(path) if path.is_file() else None
@@ -128,6 +131,23 @@ def _local(path: Path) -> list[SongLyrics]:
         if lines:
             found.append(SongLyrics("embedded", synced, lines))
     return found
+
+
+def _transcript(lines: list[dict[str, Any]]) -> SongLyrics:
+    return SongLyrics(
+        "transcript",
+        True,
+        [
+            Line(
+                line["startMs"],
+                line["text"],
+                [Word(w["startMs"], w["text"]) for w in line["words"]]
+                if line.get("words")
+                else None,
+            )
+            for line in lines
+        ],
+    )
 
 
 def _read_cache(path: Path) -> tuple[bool, SongLyrics | None]:
@@ -202,11 +222,17 @@ async def get(
     if folder is None or album is None:
         return None
     local = await asyncio.to_thread(_local, Path(folder.path) / song.path)
-    best = next((found for found in local if found.synced), None)
+    best = next((found for found in local if found.synced and found.source != "transcript"), None)
+    if best is not None:
+        return best
+    transcript = await transcripts.done(session, song.id)
+    if transcript is not None and transcript.lines:
+        return _transcript(transcript.lines)
+    best = next((found for found in local if found.synced), None)  # our .lrc, e.g. restored
     if best is not None:
         return best
     settings = await server_settings.get_external_services(session)
-    if settings.lrclib:
+    if settings.lrclib and folder.kind == music_folders.MUSIC:
         try:
             online = await _online(song, album, http, data_dir / "lyrics" / f"{song.id}.json")
         except LyricsUnavailableError:

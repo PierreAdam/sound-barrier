@@ -2352,6 +2352,85 @@ select.field__input {
   }
 }
 
+// Settings, "Transcripts" tab -------------------------------------------------------
+
+.token-created {
+  display: grid;
+  gap: @space-2;
+  padding: @space-3;
+  border-radius: @radius-sm;
+  background: color-mix(in srgb, @color-accent 10%, transparent);
+
+  p {
+    margin: 0;
+  }
+
+  &__secret {
+    font-family: ui-monospace, monospace;
+  }
+}
+
+.transcripts-working {
+  display: grid;
+  gap: @space-3;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  &__row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: @space-2;
+  }
+}
+
+.transcripts-table {
+  &__toggle {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  td .meter {
+    max-width: 160px;
+  }
+
+  &__files ol {
+    display: grid;
+    gap: @space-1;
+    margin: 0;
+    padding-left: @space-5;
+    font-size: @font-size-sm;
+
+    li {
+      display: grid;
+      grid-template-columns: 1fr auto minmax(120px, auto);
+      gap: @space-3;
+    }
+  }
+
+  &__status {
+    text-align: right;
+
+    &--done {
+      color: @color-accent;
+    }
+
+    &--failed {
+      color: @color-error;
+    }
+
+    &--pending {
+      color: @color-text-muted;
+    }
+  }
+}
+
 // Library Management, "Library" tab ---------------------------------------------
 
 .library-status {
@@ -4215,7 +4294,39 @@ select.field__input {
   color: @color-text;
 }
 
-// Now playing, audiobooks: the chapters inside the file instead of lyrics.
+// Now playing, podcasts and audiobooks: their text and / or the chapters inside the file.
+.now-playing__spoken {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: @space-3;
+  min-height: 0;
+  height: 100%;
+}
+
+.now-playing__views {
+  display: flex;
+  gap: @space-1;
+}
+
+.now-playing__view {
+  padding: @space-1 @space-3;
+  border: 0;
+  border-radius: @radius-round;
+  background: none;
+  color: @color-text-muted;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    color: @color-text;
+  }
+
+  &--active {
+    background: @color-surface-raised;
+    color: @color-text;
+  }
+}
+
 .now-playing__chapters {
   overflow-y: auto;
   min-height: 0;

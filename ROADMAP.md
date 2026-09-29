@@ -88,7 +88,17 @@ Decisions taken on what is left to do (2026-09-28). The design of what exists is
    Audible, MusicBrainz (chapter titles from the matching edition's tracks), Open Library
    and iTunes, then `<Author>/<Title>/NN - Chapter` (podcasts
    `<Show>/<date> - Episode`), tags rewritten, cover saved.
-5. ✅ **Keyboard shortcuts** (web player): Space plays / pauses, ← / → go 10 s back /
+5. ✅ **Transcripts of podcasts and audiobooks** (speech to text): a companion app
+   ([transcriber/](transcriber/README.md)) runs Whisper (faster-whisper, large-v3) on a PC
+   with an NVIDIA GPU, connects to the server with a worker token (Settings → Transcripts;
+   it only lists, downloads and transcribes podcasts / audiobooks), claims files one at a
+   time (a lease renewed while it works: two GPUs never take the same file, a PC turned off
+   gives its file back after 10 minutes) and sends the timed lines back (in parts, for
+   reverse proxies' body size limits). Kept in the database (word timing too) and written
+   as a `.lrc` next to the audio (marked as ours; someone else's `.lrc` is never replaced);
+   served like synced lyrics (Now playing, karaoke, `getLyricsBySongId`). Settings →
+   Transcripts: tokens, what is being transcribed, each book's state, retry failed, remove.
+6. ✅ **Keyboard shortcuts** (web player): Space plays / pauses, ← / → go 10 s back /
    forward, except while typing (text fields, lists), on focused buttons (Space) and
    sliders or menus (arrows).
 
