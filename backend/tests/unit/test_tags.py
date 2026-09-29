@@ -160,3 +160,23 @@ def test_no_chapters(tmp_path: Path) -> None:
     audio = read_audio_file(make_track(tmp_path / "song", fmt="mp3", title="Song"))
     assert audio is not None
     assert audio.chapters == []
+
+
+def test_series_of_an_audiobook() -> None:
+    from app.scanner.tags import series_of
+
+    assert series_of({"grouping": ["Discworld, Book 3"]}) == ("Discworld", "3")
+    assert series_of({"grouping": ["The Expanse #4"]}) == ("The Expanse", "4")
+    assert series_of({"grouping": ["Les Rois maudits, Tome 5"]}) == ("Les Rois maudits", "5")
+    assert series_of({"grouping": ["Foundation Book 1.5"]}) == ("Foundation", "1.5")
+    assert series_of({"grouping": ["Dune"]}) == ("Dune", None)
+    # A series tag wins over the grouping; MP4 / ID3 "movement" fields too.
+    assert series_of({"series": ["Mistborn"], "seriespart": ["2"], "grouping": ["x"]}) == (
+        "Mistborn",
+        "2",
+    )
+    assert series_of({"movementname": ["Wheel of Time"], "movement": ["9"]}) == (
+        "Wheel of Time",
+        "9",
+    )
+    assert series_of({}) == (None, None)

@@ -117,6 +117,12 @@ class Album(LibraryItemMixin, Base):
     )
     song_count: Mapped[int] = mapped_column(server_default=text("0"))
     duration_ms: Mapped[int] = mapped_column(BigInteger, server_default=text("0"))
+    # Podcasts and audiobooks (from their first file's tags; None for music): the
+    # description (comment tag), the narrator (composer), the series and the book's number.
+    description: Mapped[str | None]
+    narrator: Mapped[str | None]
+    series: Mapped[str | None]
+    series_number: Mapped[str | None]
 
 
 class Song(LibraryItemMixin, Base):

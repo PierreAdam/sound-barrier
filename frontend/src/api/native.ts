@@ -604,6 +604,63 @@ export interface SpokenShow {
   latest: string | null;
   started: number; // episodes / chapters with a bookmark
   played: number;
+  year: number | null;
+  narrator: string | null; // audiobooks
+  series: string | null; // audiobooks: the series, and the book's number in it
+  seriesNumber: string | null;
+}
+
+/** A show's / book's page: its episodes / chapters and the details of its tags. */
+export interface SpokenShowData {
+  show: SpokenShow;
+  episodes: Child[];
+  description: string | null;
+  genre: string | null;
+}
+
+/** A file of a book / show in "Edit details": its title and the chapters inside it. */
+export interface SpokenFileDetails {
+  id: string;
+  title: string;
+  chapters: { startMs: number; title: string }[] | null;
+  fileName: string; // read only
+  durationMs: number;
+  canWriteChapters: boolean; // MP3, M4A / M4B
+}
+
+export interface AudibleBook {
+  asin: string;
+  title: string;
+  authors: string[];
+  narrators: string[];
+  series: string | null;
+  seriesNumber: string | null;
+  durationMs: number | null;
+  coverUrl: string | null;
+  url: string | null;
+}
+
+/** A book's chapters on Audible, timed in Audible's file (it starts with a jingle, introMs). */
+export interface AudibleChapters {
+  asin: string;
+  runtimeMs: number;
+  introMs: number;
+  outroMs: number;
+  accurate: boolean;
+  chapters: { startMs: number; lengthMs: number; title: string }[];
+}
+
+/** What admins can change after the import (written into the files' tags). */
+export interface SpokenDetails {
+  title: string;
+  author: string;
+  narrator: string | null;
+  series: string | null;
+  seriesNumber: string | null;
+  year: number | null;
+  genre: string | null;
+  description: string | null;
+  files?: SpokenFileDetails[]; // in listening order
 }
 
 export interface SpokenPage {
@@ -710,7 +767,17 @@ export const api = {
   /** The sections this user has (on, with a folder). */
   getSections: () => request<Record<SpokenKind, boolean>>("GET", "/library/sections"),
   getSpokenPage: (kind: SpokenKind) => request<SpokenPage>("GET", `/spoken/${kind}`),
-  getSpokenShow: (id: string) => request<{ show: SpokenShow; episodes: Child[] }>("GET", `/spoken/shows/${id}`),
+  getSpokenShow: (id: string) => request<SpokenShowData>("GET", `/spoken/shows/${id}`),
+  getSpokenDetails: (id: string) => request<SpokenDetails>("GET", `/spoken/shows/${id}/details`),
+  /** Returns the show's / book's id afterwards (it changes with its title). */
+  setSpokenDetails: (id: string, details: SpokenDetails) =>
+    request<{ id: string }>("PUT", `/spoken/shows/${id}/details`, details),
+  searchAudible: (title: string, author?: string) =>
+    request<AudibleBook[]>(
+      "GET",
+      `/spoken/audible/search?${new URLSearchParams({ title, ...(author ? { author } : {}) }).toString()}`,
+    ),
+  getAudibleChapters: (asin: string) => request<AudibleChapters>("GET", `/spoken/audible/${asin}/chapters`),
   /** Removes the user's bookmarks of a show / book (out of "Continue listening", or started over). */
   forgetSpokenShow: (id: string) => request<void>("DELETE", `/spoken/shows/${id}/bookmarks`),
   getLibrary: () => request<{ folder: LibraryFolder | null }>("GET", "/library"),

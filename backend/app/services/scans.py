@@ -73,17 +73,19 @@ class ScanManager:
         if not self.start():
             self._rescan_requested = True
 
-    async def scan_paths(self, folder_id: int, paths: list[str]) -> bool:
+    async def scan_paths(self, folder_id: int, paths: list[str], *, reread: bool = False) -> bool:
         """Scans only `paths` (relative to the music folder) and waits for the result:
         the library shows an import / deletion as soon as this returns. Waits for a scan
         already running first. Returns False if the scan could not run (a quick scan is
-        then requested instead)."""
+        then requested instead). `reread`: every file is read again, even with the same
+        size and date (tags just edited: a change within the second of the last scan, the
+        new tag fitting in the old one's room, would otherwise go unseen)."""
         async with self._targeted:
             while self._task is not None and not self._task.done():
                 with contextlib.suppress(Exception):
                     await asyncio.shield(self._task)
             self._task = asyncio.create_task(
-                self._run(False, {folder_id: paths}), name="library-scan"
+                self._run(reread, {folder_id: paths}), name="library-scan"
             )
             return await asyncio.shield(self._task)
 

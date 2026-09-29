@@ -1,7 +1,7 @@
 """Looking up audiobooks and podcasts for the import review: Audible's catalog
-(unofficial, no key), MusicBrainz (audiobook releases: their track lists give chapter
-titles), Open Library (no key) and iTunes Search (podcasts, no key). Only titles and
-author names are sent."""
+(unofficial, no key; also a book's chapters, for "Edit details"), MusicBrainz (audiobook
+releases: their track lists give chapter titles), Open Library (no key) and iTunes Search
+(podcasts, no key). Only titles, author names and Audible book ids are sent."""
 
 import html
 import re
@@ -104,6 +104,60 @@ def _year(value: Any) -> int | None:
 
 def _names(values: Any) -> list[str]:
     return [name for v in _dicts(values) if (name := _str(v.get("name")))]
+
+
+@dataclass
+class AudibleChapter:
+    start_ms: int
+    length_ms: int
+    title: str
+
+
+@dataclass
+class AudibleChapters:
+    """A book's chapters on Audible, timed in Audible's own file: it starts with a jingle
+    (`intro_ms`, "Audible presents") that a copy of the book may not have."""
+
+    asin: str
+    runtime_ms: int
+    intro_ms: int
+    outro_ms: int
+    accurate: bool
+    chapters: list[AudibleChapter]
+
+
+async def audible_chapters(
+    http: httpx.AsyncClient, asin: str, region: str = "com"
+) -> AudibleChapters | None:
+    """None: Audible has no chapter list for this book."""
+    if region not in AUDIBLE_REGIONS:
+        region = "com"
+    if not re.fullmatch(r"[A-Z0-9]{10}", asin):
+        raise ExternalServiceError("Not an Audible book id (ASIN)")
+    data = _dict(
+        await _json(
+            http,
+            "Audible",
+            f"https://api.audible.{region}/1.0/content/{asin}/metadata",
+            {"response_groups": "chapter_info", "chapter_titles_type": "Flat", "quality": "High"},
+        )
+    )
+    info = _dict(_dict(data.get("content_metadata")).get("chapter_info"))
+    chapters = [
+        AudibleChapter(int(c["start_offset_ms"]), int(c.get("length_ms") or 0), title)
+        for c in _dicts(info.get("chapters"))
+        if isinstance(c.get("start_offset_ms"), int) and (title := _str(c.get("title")))
+    ]
+    if not chapters:
+        return None
+    return AudibleChapters(
+        asin=asin,
+        runtime_ms=int(info.get("runtime_length_ms") or 0),
+        intro_ms=int(info.get("brandIntroDurationMs") or 0),
+        outro_ms=int(info.get("brandOutroDurationMs") or 0),
+        accurate=bool(info.get("is_accurate")),
+        chapters=sorted(chapters, key=lambda c: c.start_ms),
+    )
 
 
 async def audible(

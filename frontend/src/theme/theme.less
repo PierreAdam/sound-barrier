@@ -4766,6 +4766,159 @@ select.field__input {
   }
 }
 
+// Audiobook / podcast page: its details (SpokenPages.tsx), and editing them -------------
+
+.spoken__series {
+  margin: 0;
+  color: @color-text-muted;
+}
+
+// A series page: the book's number over its cover (top right; top left has the buttons
+// of music cards).
+.spoken__book-number {
+  position: absolute;
+  top: @space-2;
+  right: @space-2;
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 @space-2;
+  border-radius: @radius-round;
+  background: @color-accent;
+  color: @color-accent-contrast;
+  font-size: @font-size-sm;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 45%);
+}
+
+.spoken__about {
+  display: grid;
+  gap: @space-4;
+  max-width: 900px;
+  margin-bottom: @space-5;
+}
+
+.spoken__description {
+  margin: 0;
+  line-height: 1.6;
+  white-space: pre-line;
+
+  &--folded {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+  }
+}
+
+.spoken__more {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: @font-size-sm;
+  cursor: pointer;
+}
+
+.spoken__details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: @space-1 @space-4;
+  margin: 0;
+  font-size: @font-size-sm;
+
+  dt {
+    color: @color-text-muted;
+  }
+
+  dd {
+    margin: 0;
+  }
+}
+
+.spoken-details__chapters {
+  display: grid;
+  gap: @space-3;
+  margin-top: @space-4;
+}
+
+.spoken-details__chapters-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: @space-3;
+}
+
+.spoken-details__file {
+  display: grid;
+  gap: @space-2;
+}
+
+.spoken-details__chapter-list {
+  display: grid;
+  gap: @space-1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    align-items: center;
+    gap: @space-2;
+  }
+}
+
+.spoken-details__time {
+  font-size: @font-size-sm;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.audible-lookup {
+  display: grid;
+  flex: 1 1 420px;
+  gap: @space-2;
+
+  &__results {
+    display: grid;
+    gap: @space-1;
+    max-height: 320px;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+  }
+
+  &__result {
+    display: grid;
+    gap: 2px;
+    width: 100%;
+    padding: @space-2 @space-3;
+    border: 1px solid @color-border;
+    border-radius: @radius-sm;
+    background: @color-surface;
+    color: @color-text;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      border-color: @color-accent;
+    }
+  }
+}
+
+.spoken-details__description {
+  min-height: 160px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.5;
+}
+
 // Display diagnostics (About → "Display diagnostics", DisplayDiagnostics.tsx) -----------
 
 // Where the app ends (blue), the window (red), the screen's height (green).

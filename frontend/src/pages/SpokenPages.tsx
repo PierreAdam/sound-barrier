@@ -1,8 +1,15 @@
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { api, type SpokenKind, type SpokenPage as PageData, type SpokenShow } from "../api/native";
+import {
+  api,
+  type SpokenKind,
+  type SpokenPage as PageData,
+  type SpokenShow,
+  type SpokenShowData,
+} from "../api/native";
 import type { Child } from "../api/types";
+import { useSession } from "../auth/AuthContext";
 import { CoverArt } from "../components/CoverArt";
 import { PlayIcon } from "../components/Icons";
 import { formatDuration, formatTime, plural } from "../format";
@@ -11,6 +18,86 @@ import { songToTrack, usePlayer } from "../player/PlayerContext";
 const TITLES: Record<SpokenKind, string> = { podcasts: "Podcasts", audiobooks: "Audiobooks" };
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const showUrl = (show: SpokenShow) => `/${show.kind}/${show.id}`;
+const seriesUrl = (series: string) => `/audiobooks/series/${encodeURIComponent(series)}`;
+
+/** A series' books in reading order: by number (1, 1.5, 2...), then title. */
+function inSeriesOrder(books: SpokenShow[]): SpokenShow[] {
+  const number = (b: SpokenShow) => {
+    const n = Number.parseFloat(b.seriesNumber ?? "");
+    return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+  };
+  return [...books].sort((a, b) => number(a) - number(b) || a.title.localeCompare(b.title));
+}
+
+/** An item of the Audiobooks grid: a book, or a series (its books behind one card). */
+type GridItem = { book: SpokenShow } | { series: string; books: SpokenShow[] };
+
+function gridItems(shows: SpokenShow[], kind: SpokenKind): GridItem[] {
+  if (kind !== "audiobooks") return shows.map((book) => ({ book }));
+  const series = new Map<string, SpokenShow[]>();
+  const items: GridItem[] = [];
+  for (const show of shows) {
+    if (!show.series) {
+      items.push({ book: show });
+      continue;
+    }
+    const key = show.series.toLocaleLowerCase();
+    const books = series.get(key);
+    if (books) books.push(show);
+    else {
+      const first = [show];
+      series.set(key, first);
+      items.push({ series: show.series, books: first });
+    }
+  }
+  const name = (item: GridItem) => ("book" in item ? item.book.title : item.series);
+  return items
+    .map((item) => ("books" in item ? { ...item, books: inSeriesOrder(item.books) } : item))
+    .sort((a, b) => name(a).localeCompare(name(b), undefined, { sensitivity: "base" }));
+}
+
+function BookCard({
+  show,
+  kind,
+  label,
+  number,
+}: {
+  show: SpokenShow;
+  kind: SpokenKind;
+  label?: string;
+  number?: string | null; // a series' book: its number, over the cover
+}) {
+  return (
+    <Link className="album-card spoken__card" to={showUrl(show)} title={show.title}>
+      <CoverArt id={show.coverArt ?? undefined} size={320} className="album-card__cover" alt="" />
+      {number && (
+        <span className="spoken__book-number" aria-label={`Book ${number}`}>
+          {number}
+        </span>
+      )}
+      <span className="album-card__name">{show.title}</span>
+      <span className="album-card__info">
+        {label ?? (kind === "audiobooks" ? show.author : plural(show.episodes, "episode"))}
+        {show.started > 0 && <span className="badge spoken__badge">Started</span>}
+      </span>
+    </Link>
+  );
+}
+
+function SeriesCard({ series, books }: { series: string; books: SpokenShow[] }) {
+  const cover = books.find((b) => b.coverArt)?.coverArt;
+  const authors = [...new Set(books.map((b) => b.author))].join(", ");
+  return (
+    <Link className="album-card spoken__card spoken__series-card" to={seriesUrl(series)} title={series}>
+      <CoverArt id={cover ?? undefined} size={320} className="album-card__cover" alt="" />
+      <span className="album-card__name">{series}</span>
+      <span className="album-card__info">
+        {plural(books.length, "book")} · {authors}
+        {books.some((b) => b.started > 0) && <span className="badge spoken__badge">Started</span>}
+      </span>
+    </Link>
+  );
+}
 
 /** Seconds listened of an episode: its bookmark (ms). */
 const listened = (episode: Child) => (episode.bookmarkPosition ?? 0) / 1000;
@@ -198,21 +285,68 @@ export function SpokenPage({ kind }: { kind: SpokenKind }) {
             </div>
           ) : (
             <ul className="album-grid">
-              {data.shows.map((show) => (
-                <li key={show.id}>
-                  <Link className="album-card spoken__card" to={showUrl(show)} title={show.title}>
-                    <CoverArt id={show.coverArt ?? undefined} size={320} className="album-card__cover" alt="" />
-                    <span className="album-card__name">{show.title}</span>
-                    <span className="album-card__info">
-                      {kind === "audiobooks" ? show.author : plural(show.episodes, "episode")}
-                      {show.started > 0 && <span className="badge spoken__badge">Started</span>}
-                    </span>
-                  </Link>
-                </li>
-              ))}
+              {gridItems(data.shows, kind).map((item) =>
+                "book" in item ? (
+                  <li key={item.book.id}>
+                    <BookCard show={item.book} kind={kind} />
+                  </li>
+                ) : (
+                  // A series: one card, its books behind it.
+                  <li key={`series:${item.series}`}>
+                    <SeriesCard series={item.series} books={item.books} />
+                  </li>
+                ),
+              )}
             </ul>
           )}
         </section>
+      )}
+    </div>
+  );
+}
+
+/** The books of a series, in reading order (a series card of the Audiobooks page). */
+export function SpokenSeriesPage() {
+  const { series = "" } = useParams();
+  const [books, setBooks] = useState<SpokenShow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setBooks(null);
+    api
+      .getSpokenPage("audiobooks")
+      .then((page) =>
+        setBooks(inSeriesOrder(page.shows.filter((s) => s.series?.toLocaleLowerCase() === series.toLocaleLowerCase()))),
+      )
+      .catch((e: unknown) => setError(errorText(e)));
+  }, [series]);
+
+  if (error) return <p className="text-error">{error}</p>;
+  if (!books) return <p className="text-muted">Loading…</p>;
+  const authors = [...new Set(books.map((b) => b.author))].join(", ");
+  const total = books.reduce((sum, b) => sum + b.durationMs, 0) / 1000;
+  return (
+    <div className="page spoken">
+      <p className="text-muted">
+        <Link className="link" to="/audiobooks">
+          Audiobooks
+        </Link>{" "}
+        · Series
+      </p>
+      <h1 className="page__title">{books[0]?.series ?? series}</h1>
+      <p className="text-muted">
+        {authors} · {plural(books.length, "book")} · {formatDuration(total)}
+      </p>
+      {books.length === 0 ? (
+        <p className="text-muted">No book of this series.</p>
+      ) : (
+        <ul className="album-grid">
+          {books.map((book) => (
+            <li key={book.id}>
+              <BookCard show={book} kind="audiobooks" label={book.author} number={book.seriesNumber} />
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -222,8 +356,9 @@ export function SpokenPage({ kind }: { kind: SpokenKind }) {
 export function SpokenShowPage({ kind }: { kind: SpokenKind }) {
   const { id = "" } = useParams();
   const { state } = usePlayer();
+  const { user } = useSession();
   const playFrom = usePlayFrom();
-  const [data, setData] = useState<{ show: SpokenShow; episodes: Child[] } | null>(null);
+  const [data, setData] = useState<SpokenShowData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -238,8 +373,9 @@ export function SpokenShowPage({ kind }: { kind: SpokenKind }) {
 
   if (error) return <p className="text-error">{error}</p>;
   if (!data) return <p className="text-muted">Loading…</p>;
-  const { show, episodes } = data;
+  const { show, episodes, description, genre } = data;
   const book = kind === "audiobooks";
+  const first = episodes[0];
 
   // Audiobook: the chapter being listened to (in a file, or a whole file), and how far
   // into the whole book.
@@ -256,7 +392,7 @@ export function SpokenShowPage({ kind }: { kind: SpokenKind }) {
     // The book starts again: its bookmarks go.
     await api.forgetSpokenShow(show.id).catch(() => undefined);
     const cleared = episodes.map((e) => ({ ...e, bookmarkPosition: undefined }));
-    setData({ show, episodes: cleared });
+    setData({ ...data!, episodes: cleared });
     playFrom(kind, cleared, 0);
   }
 
@@ -268,6 +404,14 @@ export function SpokenShowPage({ kind }: { kind: SpokenKind }) {
           <span className="text-muted">{book ? "Audiobook" : "Podcast"}</span>
           <h1 className="page__title">{show.title}</h1>
           {show.author && <p className="spoken__author">{show.author}</p>}
+          {book && show.series && (
+            <p className="spoken__series">
+              {show.seriesNumber ? `Book ${show.seriesNumber} of ` : ""}
+              <Link className="link" to={seriesUrl(show.series)}>
+                {show.series}
+              </Link>
+            </p>
+          )}
           <p className="text-muted">
             {plural(book ? parts.length : show.episodes, book ? "chapter" : "episode")} · {formatDuration(total)}
           </p>
@@ -298,9 +442,49 @@ export function SpokenShowPage({ kind }: { kind: SpokenKind }) {
                 </button>
               )
             )}
+            {user.adminRole && (
+              <Link className="button button--ghost" to={`/${kind}/${show.id}/details`}>
+                Edit details
+              </Link>
+            )}
           </div>
         </div>
       </header>
+
+      <section className="spoken__about" aria-label="Details">
+        {description && <Description text={description} />}
+        <dl className="spoken__details">
+          {show.narrator && (
+            <>
+              <dt>Narrated by</dt>
+              <dd>{show.narrator}</dd>
+            </>
+          )}
+          {show.year && (
+            <>
+              <dt>Year</dt>
+              <dd>{show.year}</dd>
+            </>
+          )}
+          {genre && (
+            <>
+              <dt>Genre</dt>
+              <dd>{genre}</dd>
+            </>
+          )}
+          <dt>Length</dt>
+          <dd>{formatDuration(total)}</dd>
+          {first?.suffix && (
+            <>
+              <dt>Format</dt>
+              <dd>
+                {first.suffix.toUpperCase()}
+                {first.bitRate ? ` · ${first.bitRate} kbps` : ""} · {plural(episodes.length, "file")}
+              </dd>
+            </>
+          )}
+        </dl>
+      </section>
 
       <ol className="spoken__episodes">
         {episodes.map((episode, index) => {
@@ -341,6 +525,22 @@ export function SpokenShowPage({ kind }: { kind: SpokenKind }) {
           );
         })}
       </ol>
+    </div>
+  );
+}
+
+/** A description: its first lines, and all of it on demand when it is long. */
+function Description({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 420 || text.split("\n").length > 5;
+  return (
+    <div className="spoken__description-block">
+      <p className={`spoken__description${long && !open ? " spoken__description--folded" : ""}`}>{text}</p>
+      {long && (
+        <button className="link spoken__more" type="button" onClick={() => setOpen(!open)}>
+          {open ? "Less" : "More"}
+        </button>
+      )}
     </div>
   );
 }

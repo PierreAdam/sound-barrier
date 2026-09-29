@@ -40,6 +40,11 @@ _ALIASES = {
     "organization": "label",
     "publisher": "label",
     "description": "comment",
+    # Audiobook series (Mp3tag, Audiobookshelf...): its name and the book's number.
+    "series-part": "seriespart",
+    "series_part": "seriespart",
+    "seriesnumber": "seriespart",
+    "movementname": "movementname",
     "unsyncedlyrics": "lyrics",
     "unsynced lyrics": "lyrics",
     "itunesadvisory": "explicit",
@@ -77,6 +82,10 @@ _ID3_FRAMES = {
     "TSOC": "composersort",
     "TMOO": "mood",
     "TSST": "discsubtitle",
+    "TIT1": "grouping",  # also where the import writes an audiobook's series
+    "GRP1": "grouping",
+    "MVNM": "movementname",  # audiobook series (Mp3tag's convention)
+    "MVIN": "movement",
 }
 
 # ID3 TIPL (involved people) roles we keep, mapped to contributor roles.
@@ -98,6 +107,8 @@ _MP4_ATOMS = {
     "\xa9wrt": "composer",
     "\xa9cmt": "comment",
     "\xa9lyr": "lyrics",
+    "\xa9grp": "grouping",
+    "\xa9mvn": "movementname",  # audiobook series (M4B tools' convention)
     "sonm": "titlesort",
     "soar": "artistsort",
     "soaa": "albumartistsort",
@@ -123,6 +134,7 @@ _ASF_ATTRIBUTES = {
     "wm/publisher": "label",
     "wm/mood": "mood",
     "wm/lyrics": "lyrics",
+    "wm/contentgroupdescription": "grouping",
     "wm/artistsortorder": "artistsort",
     "wm/albumartistsortorder": "albumartistsort",
     "wm/albumsortorder": "albumsort",
@@ -198,6 +210,8 @@ def _raw_mp4(tags: MP4Tags) -> tuple[RawTags, bool]:
                 _add(raw, f"{prefix}total", str(total))
         elif key == "tmpo":
             _add(raw, "bpm", [str(v) for v in values])
+        elif key == "\xa9mvi":  # the series number of an audiobook (an integer atom)
+            _add(raw, "movement", [str(v) for v in values])
         elif key == "cpil":
             _add(raw, "compilation", "1" if values else "0")
         elif key == "rtng":
@@ -311,6 +325,10 @@ class TrackTags:
     contributors: list[Contributor] = field(default_factory=list[Contributor])
     bpm: int | None = None
     comment: str | None = None
+    grouping: str | None = None
+    # Audiobooks: the series and the book's number in it (see series_of).
+    series: str | None = None
+    series_number: str | None = None
     compilation: bool = False
     labels: list[str] = field(default_factory=list[str])
     release_types: list[str] = field(default_factory=list[str])
@@ -434,6 +452,31 @@ def _display(tag_values: list[str], names: list[str]) -> str | None:
     return " • ".join(tag_values or names) or None
 
 
+# "Series, Book 3", "Series #3", "Series - Vol. 2", "Série, Tome 4" (\u2013: an en dash).
+_SERIES_NUMBER = re.compile(
+    r"^(?P<series>.*?)[\s,;:\-\u2013]*"
+    r"(?:\bbook|\bvol(?:ume)?\.?|\btome|\bpart|#)\s*(?P<number>\d+(?:\.\d+)?)\s*$",
+    re.IGNORECASE,
+)
+
+
+def series_of(raw: RawTags) -> tuple[str | None, str | None]:
+    """An audiobook's series and number: a series tag (SERIES / SERIES-PART, MP4 and ID3
+    "movement" fields), else the grouping ("Series, Book 3", as the import writes it;
+    "Series #3", "Series Vol. 2"...)."""
+    series = _first(raw, "series") or _first(raw, "movementname")
+    number = _first(raw, "seriespart") or _first(raw, "movement")
+    if series:
+        return series.strip(), (number or "").strip() or None
+    grouping = (_first(raw, "grouping") or "").strip()
+    if not grouping:
+        return None, None
+    found = _SERIES_NUMBER.match(grouping)
+    if found and found.group("series").strip():
+        return found.group("series").strip(), found.group("number")
+    return grouping, None
+
+
 def build_track_tags(raw: RawTags, *, has_picture: bool) -> TrackTags:
     artist_values = _values(raw, "artist")
     artists = _values(raw, "artists") or artist_values
@@ -442,6 +485,7 @@ def build_track_tags(raw: RawTags, *, has_picture: bool) -> TrackTags:
 
     track_number, track_total = _number_pair(_first(raw, "tracknumber"))
     disc_number, disc_total = _number_pair(_first(raw, "discnumber"))
+    series, series_number = series_of(raw)
 
     contributors: list[Contributor] = []
     for role in CONTRIBUTOR_ROLES:
@@ -481,6 +525,9 @@ def build_track_tags(raw: RawTags, *, has_picture: bool) -> TrackTags:
         contributors=contributors,
         bpm=bpm or None,
         comment=_first(raw, "comment"),
+        grouping=_first(raw, "grouping"),
+        series=series,
+        series_number=series_number,
         compilation=(_first(raw, "compilation") or "").casefold() in ("1", "true", "yes"),
         labels=_values(raw, "label"),
         release_types=[t.casefold() for t in _values(raw, "releasetype", split=";")],

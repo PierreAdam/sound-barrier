@@ -482,7 +482,12 @@ class _ScanRun:
         display_album_artist = tags.display_album_artist or " • ".join(album_artist_names)
 
         album_id = await self._album(
-            session, audio, directory, album_artist_ids, display_album_artist
+            session,
+            audio,
+            directory,
+            album_artist_ids,
+            display_album_artist,
+            spoken=folder.kind != "music",  # podcasts, audiobooks (services/music_folders.py)
         )
         if tags.disc_number and tags.disc_subtitle:
             titles = self.disc_titles.setdefault(album_id, {})
@@ -611,6 +616,8 @@ class _ScanRun:
         directory: DirectoryEntry,
         album_artist_ids: list[uuid.UUID],
         display_artist: str,
+        *,
+        spoken: bool,
     ) -> uuid.UUID:
         tags = audio.tags
         name = tags.album or directory.name or UNKNOWN_ALBUM
@@ -638,6 +645,11 @@ class _ScanRun:
             "explicit_status": tags.explicit_status,
             "mbz_album_id": tags.mbz_album_id,
             "mbz_release_group_id": tags.mbz_release_group_id,
+            # A book's / show's details (music: the comment and grouping are not its own).
+            "description": tags.comment if spoken else None,
+            "narrator": (" • ".join(tags.composers) or None) if spoken else None,
+            "series": tags.series if spoken else None,
+            "series_number": tags.series_number if spoken else None,
         }
         statement = insert(Album).values(**values)
         statement = statement.on_conflict_do_update(

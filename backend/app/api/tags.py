@@ -149,7 +149,7 @@ async def save_tags(
     # The library (web UI, Subsonic apps) shows the new tags as soon as this returns.
     scans: ScanManager = request.app.state.scans
     folders = sorted({str(Path(s.path).parent.as_posix()) for s in songs})
-    await scans.scan_paths(folder.id, [f if f != "." else "" for f in folders])
+    await scans.scan_paths(folder.id, [f if f != "." else "" for f in folders], reread=True)
     session.expire_all()
     new_album = await session.scalar(select(Song.album_id).where(Song.id == first_song))
     return SavedTags(album_id=new_album, files=len(changes))

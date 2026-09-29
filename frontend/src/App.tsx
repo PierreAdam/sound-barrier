@@ -16,7 +16,8 @@ import { PlaylistPage } from "./pages/PlaylistPage";
 import { PlaylistsPage } from "./pages/PlaylistsPage";
 import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { SpokenPage, SpokenShowPage } from "./pages/SpokenPages";
+import { SpokenDetailsPage } from "./pages/SpokenDetailsPage";
+import { SpokenPage, SpokenSeriesPage, SpokenShowPage } from "./pages/SpokenPages";
 
 export function App() {
   return (
@@ -40,8 +41,11 @@ export function App() {
             <Route path="/playlists/:id" element={<PlaylistPage />} />
             <Route path="/podcasts" element={<SpokenPage kind="podcasts" />} />
             <Route path="/podcasts/:id" element={<SpokenShowPage kind="podcasts" />} />
+            <Route path="/podcasts/:id/details" element={<SpokenDetailsPage kind="podcasts" />} />
             <Route path="/audiobooks" element={<SpokenPage kind="audiobooks" />} />
+            <Route path="/audiobooks/series/:series" element={<SpokenSeriesPage />} />
             <Route path="/audiobooks/:id" element={<SpokenShowPage kind="audiobooks" />} />
+            <Route path="/audiobooks/:id/details" element={<SpokenDetailsPage kind="audiobooks" />} />
           </Route>
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
