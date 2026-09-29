@@ -40,7 +40,7 @@ export function AlbumCard({ album, info }: { album: AlbumID3; info?: ReactNode }
   return (
     <div className="album-card">
       <Link className="album-card__link" to={`/albums/${album.id}`} title={album.name}>
-        <CoverArt id={album.coverArt} size={180} className="album-card__cover" alt="" />
+        <CoverArt id={album.coverArt} size={320} className="album-card__cover" alt="" />
         <span className="album-card__name">{album.name}</span>
         <span className="album-card__info">{info ?? album.year ?? " "}</span>
       </Link>

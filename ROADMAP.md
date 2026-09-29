@@ -73,11 +73,27 @@ Decisions taken on what is left to do (2026-09-28). The design of what exists is
    show in the player bar.
 3. **Import page**: "Analyzing…" while the "In library" badges are computed; results
    kept a day (data folder) unless the folders or the library change.
+4. ✅ **Podcasts and audiobooks** (spec: [docs/specs/podcasts-audiobooks.md](docs/specs/podcasts-audiobooks.md)):
+   their own optional folders (Settings → Library, Docker `/podcasts`, `/audiobooks`) and
+   admin switches, never mixed with music; Podcasts / Audiobooks pages (continue listening,
+   progress, resume, start over); "Import as" Music / Podcast / Audiobook; bookmarks
+   (`getBookmarks`, `createBookmark`, `deleteBookmark`); Subsonic apps get both through the
+   podcast API (`getPodcasts`, `getNewestPodcasts`, `getPodcastEpisode`; no RSS); player
+   speed 1×–2× and −15 s / +30 s for these files, no shuffle / repeat / crossfade. Chapters
+   inside a file (M4B / M4A chapter lists, ID3 `CHAP`) listed under it and in Now playing,
+   "previous" / "next" by chapter; books whose track numbers are inconsistent are ordered by
+   file name; "Dismiss" in Continue listening; deletion in Library Management → Delete.
+   Imports go through the review (spec: [docs/specs/spoken-import-review.md](docs/specs/spoken-import-review.md)):
+   one card per book / show, metadata prefilled from tags and folder names, candidates from
+   Audible, MusicBrainz (chapter titles from the matching edition's tracks), Open Library
+   and iTunes, then `<Author>/<Title>/NN - Chapter` (podcasts
+   `<Show>/<date> - Episode`), tags rewritten, cover saved.
+5. ✅ **Keyboard shortcuts** (web player): Space plays / pauses, ← / → go 10 s back /
+   forward, except while typing (text fields, lists), on focused buttons (Space) and
+   sliders or menus (arrows).
 
 ## Maybe later
 
-- **Bookmarks** (`getBookmarks`, `createBookmark`, `deleteBookmark`), for podcasts and
-  audiobooks rather than music.
 - **Equalizer** (web UI only): 10 bands on the Web Audio graph of the visualizer.
 - **Moved / renamed files keep their user data** (play counts, stars, playlists): today a
   moved file is a new song (ARCHITECTURE.md 9.5).

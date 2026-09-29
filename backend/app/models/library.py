@@ -35,6 +35,8 @@ class MusicFolder(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str]
     path: Mapped[str] = mapped_column(unique=True)
+    # music, podcasts or audiobooks (services/music_folders.py): never mixed.
+    kind: Mapped[str] = mapped_column(server_default=text("'music'"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
@@ -162,6 +164,8 @@ class Song(LibraryItemMixin, Base):
         ForeignKey("artwork.id", ondelete="SET NULL")
     )
     file_mtime: Mapped[datetime]
+    # Chapters inside the file (audiobooks): [{"startMs": 0, "title": "Chapter 1"}, ...]
+    chapters: Mapped[list[dict[str, Any]] | None]
 
 
 class Genre(Base):

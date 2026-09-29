@@ -12,9 +12,15 @@ from app.services import browsing, lyrics
 router = APIRouter(tags=["lyrics"])
 
 
+class WordOut(ApiModel):
+    start_ms: int
+    text: str  # with its trailing space, if any
+
+
 class LineOut(ApiModel):
     start_ms: int | None  # None: not synced
     text: str
+    words: list[WordOut] | None  # word by word timing, when the lyrics have it
 
 
 class LyricsOut(ApiModel):
@@ -48,5 +54,14 @@ async def song_lyrics(
         source=found.source,
         synced=found.synced,
         instrumental=found.instrumental,
-        lines=[LineOut(start_ms=line.start_ms, text=line.text) for line in found.lines],
+        lines=[
+            LineOut(
+                start_ms=line.start_ms,
+                text=line.text,
+                words=[WordOut(start_ms=w.start_ms, text=w.text) for w in line.words]
+                if line.words
+                else None,
+            )
+            for line in found.lines
+        ],
     )

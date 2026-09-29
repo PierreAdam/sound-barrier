@@ -128,3 +128,35 @@ def test_text_helpers() -> None:
     assert strip_articles("Theatre") == "Theatre"
     assert index_letter("Émilie") == "E"
     assert index_letter("2Pac") == "#"
+
+
+def test_chapters_inside_a_file(tmp_path: Path) -> None:
+    from mutagen.id3 import CHAP, ID3, TIT2
+
+    path = make_track(tmp_path / "book", fmt="mp3", title="The Book")
+    tags = ID3(path)
+    # Out of order, one untitled, one past the end of the file (ignored).
+    for element, start, title in [
+        ("c2", 400, "Two"),
+        ("c1", 0, "One"),
+        ("c3", 700, None),
+        ("c4", 5000, "Out"),
+    ]:
+        frames = [TIT2(encoding=3, text=[title])] if title else []
+        tags.add(
+            CHAP(element_id=element, start_time=start, end_time=start + 100, sub_frames=frames)
+        )
+    tags.save(path)
+    audio = read_audio_file(path)
+    assert audio is not None
+    assert [(c.start_ms, c.title) for c in audio.chapters] == [
+        (0, "One"),
+        (400, "Two"),
+        (700, "Chapter 3"),
+    ]
+
+
+def test_no_chapters(tmp_path: Path) -> None:
+    audio = read_audio_file(make_track(tmp_path / "song", fmt="mp3", title="Song"))
+    assert audio is not None
+    assert audio.chapters == []

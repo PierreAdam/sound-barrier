@@ -40,3 +40,26 @@ def title_key(title: str) -> str:
     "Blinded By Fear" are the same song, "Deceiver of the Gods [Deluxe Edition]" and
     "Deceiver of the Gods" the same album."""
     return normalize(_PUNCTUATION.sub(" ", _BRACKETS.sub(" ", title)))
+
+
+def natural_key(value: str) -> list[tuple[int, int | str]]:
+    """ "CH2" before "CH10": the numbers in a name compare as numbers."""
+    return [
+        (0, int(part)) if part.isdigit() else (1, part)
+        for part in re.split(r"(\d+)", value.casefold())
+        if part
+    ]
+
+
+def consistent_numbers(numbers: list[tuple[int | None, int | None]]) -> bool:
+    """Whether (disc, track) numbers can give an order: all tracks present, no two the
+    same on a disc, none above the number of tracks of its disc. Audiobooks often carry
+    leftovers of a CD rip instead (chapter 1 track 1, chapter 2 track 29...)."""
+    discs: dict[int, list[int]] = {}
+    for disc, track in numbers:
+        if not track:
+            return False
+        discs.setdefault(disc or 1, []).append(track)
+    return all(
+        len(set(tracks)) == len(tracks) and max(tracks) <= len(tracks) for tracks in discs.values()
+    )

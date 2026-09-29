@@ -14,6 +14,7 @@ from app.api import (
     plugins,
     preferences,
     queue,
+    spoken,
     tags,
 )
 
@@ -27,6 +28,7 @@ def build_router() -> APIRouter:
     router.include_router(new_releases.router)
     router.include_router(preferences.router)
     router.include_router(queue.router)
+    router.include_router(spoken.router)
     router.include_router(external.router)
     router.include_router(covers.router)
     router.include_router(discography.router)

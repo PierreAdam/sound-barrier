@@ -6,6 +6,7 @@ import { ImportSection } from "./settings/ImportSection";
 import { LibrarySection } from "./settings/LibrarySection";
 import { PluginsSection } from "./settings/PluginsSection";
 import { ScheduleSection } from "./settings/ScheduleSection";
+import { SpokenSection } from "./settings/SpokenSection";
 import { SETTINGS_TABS as TABS } from "./settings/tabs";
 import { UsersSection } from "./settings/UsersSection";
 
@@ -39,6 +40,7 @@ export function SettingsPage() {
       {tab === "library" && (
         <>
           <LibrarySection />
+          <SpokenSection />
           <ScheduleSection />
         </>
       )}

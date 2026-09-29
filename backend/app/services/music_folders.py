@@ -8,17 +8,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AppUser, MusicFolder, UserMusicFolder
 
+# Folder kinds: music, and spoken audio (podcasts, audiobooks), kept apart everywhere.
+MUSIC, PODCASTS, AUDIOBOOKS = "music", "podcasts", "audiobooks"
+SPOKEN_KINDS = (PODCASTS, AUDIOBOOKS)
+ALL_KINDS = (MUSIC, *SPOKEN_KINDS)
+FOLDER_NAMES = {MUSIC: "Music", PODCASTS: "Podcasts", AUDIOBOOKS: "Audiobooks"}
+
 
 class InvalidMusicFolderError(Exception):
     pass
 
 
 async def list_all(session: AsyncSession) -> Sequence[MusicFolder]:
+    """Every folder, all kinds."""
     return (await session.scalars(select(MusicFolder).order_by(MusicFolder.id))).all()
 
 
-async def list_for_user(session: AsyncSession, user: AppUser) -> Sequence[MusicFolder]:
-    """Folders the user may access. A user with no explicit restriction sees every folder."""
+async def list_for_user(
+    session: AsyncSession, user: AppUser, kinds: Sequence[str] = (MUSIC,)
+) -> Sequence[MusicFolder]:
+    """Folders of these kinds the user may access (music only, by default). A user with
+    no explicit restriction sees every folder."""
     restricted = (
         await session.scalars(
             select(MusicFolder)
@@ -27,7 +37,8 @@ async def list_for_user(session: AsyncSession, user: AppUser) -> Sequence[MusicF
             .order_by(MusicFolder.id)
         )
     ).all()
-    return restricted or await list_all(session)
+    folders = restricted or await list_all(session)
+    return [f for f in folders if f.kind in kinds]
 
 
 async def remove(session: AsyncSession, folder_id: int) -> MusicFolder | None:
@@ -55,22 +66,32 @@ async def _checked_path(path: str | Path) -> Path:
     return resolved
 
 
+async def get_folder(session: AsyncSession, kind: str) -> MusicFolder | None:
+    """The folder of a kind. The web UI manages one per kind (the first one)."""
+    return await session.scalar(
+        select(MusicFolder).where(MusicFolder.kind == kind).order_by(MusicFolder.id).limit(1)
+    )
+
+
 async def get_library(session: AsyncSession) -> MusicFolder | None:
-    """The library folder. The web UI manages a single folder (the first one)."""
-    return await session.scalar(select(MusicFolder).order_by(MusicFolder.id).limit(1))
+    """The music library folder."""
+    return await get_folder(session, MUSIC)
 
 
-async def set_library(session: AsyncSession, path: str, name: str) -> tuple[MusicFolder, bool]:
-    """Creates the library folder or changes its path / name. Returns (folder, path changed).
+async def set_folder(
+    session: AsyncSession, kind: str, path: str, name: str | None = None
+) -> tuple[MusicFolder, bool]:
+    """Creates the folder of a kind or changes its path / name. Returns (folder, path
+    changed).
 
     Changing the path keeps the folder id: songs are stored relative to it, so moving the
     same library to a new place (e.g. a Docker mount) keeps every song and user data.
     """
     resolved = await _checked_path(path)
-    name = name.strip() or "Music"
-    folder = await get_library(session)
+    name = (name or "").strip() or FOLDER_NAMES[kind]
+    folder = await get_folder(session, kind)
     if folder is None:
-        return await create(session, name, resolved), True
+        return await create(session, name, resolved, kind), True
     changed = folder.path != str(resolved)
     folder.path = str(resolved)
     folder.name = name
@@ -78,12 +99,18 @@ async def set_library(session: AsyncSession, path: str, name: str) -> tuple[Musi
     return folder, changed
 
 
-async def create(session: AsyncSession, name: str, path: str | Path) -> MusicFolder:
+async def set_library(session: AsyncSession, path: str, name: str) -> tuple[MusicFolder, bool]:
+    return await set_folder(session, MUSIC, path, name)
+
+
+async def create(
+    session: AsyncSession, name: str, path: str | Path, kind: str = MUSIC
+) -> MusicFolder:
     resolved = await _checked_path(path)
     existing = await session.scalar(select(MusicFolder).where(MusicFolder.path == str(resolved)))
     if existing is not None:
-        raise InvalidMusicFolderError(f"Music folder already exists: {resolved}")
-    folder = MusicFolder(name=name, path=str(resolved))
+        raise InvalidMusicFolderError(f"This folder is already a library folder: {resolved}")
+    folder = MusicFolder(name=name, path=str(resolved), kind=kind)
     session.add(folder)
     await session.flush()
     return folder

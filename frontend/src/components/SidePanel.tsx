@@ -1,6 +1,8 @@
 import { NavLink } from "react-router-dom";
 
 import { useSubsonic } from "../api/useSubsonic";
+import { useSession } from "../auth/AuthContext";
+import { LibraryIcon } from "./Icons";
 
 /** DOM id of a letter group in the side panel ("#" is not usable in an id selector). */
 function letterId(letter: string): string {
@@ -8,15 +10,24 @@ function letterId(letter: string): string {
 }
 
 /**
- * Left panel: the artist index (like Subsonic), with letters to jump to. The admin pages
- * (Settings, Library Management) are in the user menu of the top bar.
+ * Left panel: the artist index (like Subsonic), with letters to jump to. Admins also get
+ * Library Management on top (often needed); Settings stay in the user menu.
  */
 export function SidePanel() {
   const { data, error } = useSubsonic("getArtists");
   const index = data?.artists.index ?? [];
+  const { user } = useSession();
 
   return (
     <aside className="sidepanel">
+      {user.adminRole && (
+        <nav className="sidepanel__pages" aria-label="Pages">
+          <NavLink to="/manage" className={({ isActive }) => `sidepanel__page${isActive ? " sidepanel__page--active" : ""}`}>
+            <LibraryIcon />
+            <span>Library Management</span>
+          </NavLink>
+        </nav>
+      )}
       <div className="sidepanel__artists" aria-label="Artists">
         {error && <p className="text-error sidepanel__message">{error.message}</p>}
         {data && index.length === 0 && <p className="text-muted sidepanel__message">No artists yet.</p>}

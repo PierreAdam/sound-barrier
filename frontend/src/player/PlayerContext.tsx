@@ -1,10 +1,12 @@
 import {
   createContext,
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore,
 } from "react";
 
@@ -12,14 +14,34 @@ import type { SubsonicClient } from "../api/subsonic";
 import { useSession } from "../auth/AuthContext";
 import { usePreferences } from "../preferences/PreferencesContext";
 import { resumeAudio } from "./audioGraph";
+import { createBookmarkKeeper, RESUME_FROM_S, FINISHED_S, STARTED_S } from "./bookmarks";
 import { PlayerEngine, type PlayerSnapshot } from "./engine";
 import { createScrobbler } from "./scrobble";
+import { SEEK_STEP_S, shortcutFor } from "./shortcuts";
 import { useWebQueue } from "./useWebQueue";
 
 export type { Track } from "./engine";
 export { songToTrack } from "./tracks";
 
 const PlayerContext = createContext<PlayerEngine | null>(null);
+
+/** "Resumed at 12:34": shown by the player bar after an audiobook / podcast resumed. */
+export interface ResumeNotice {
+  trackId: string;
+  seconds: number;
+}
+
+interface ResumeValue {
+  notice: ResumeNotice | null;
+  startOver(): void;
+  dismiss(): void;
+}
+
+const ResumeContext = createContext<ResumeValue>({ notice: null, startOver: () => undefined, dismiss: () => undefined });
+
+export function useResumeNotice(): ResumeValue {
+  return useContext(ResumeContext);
+}
 
 function safeLocalStorage(): Storage | null {
   try {
@@ -49,7 +71,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useWebQueue(engine);
   useScrobbling(engine, client);
   useAudioResume(engine);
-  return <PlayerContext.Provider value={engine}>{children}</PlayerContext.Provider>;
+  useShortcuts(engine);
+  const resume = useBookmarks(engine, client);
+  return (
+    <PlayerContext.Provider value={engine}>
+      <ResumeContext.Provider value={resume}>{children}</ResumeContext.Provider>
+    </PlayerContext.Provider>
+  );
 }
 
 /** Player state (re-renders on change) and the engine to send commands to. */
@@ -74,6 +102,7 @@ function useSyncedPlayerPreferences(engine: PlayerEngine): void {
     if (!saved) return;
     engine.setCrossfade(saved.crossfade);
     engine.setCrossfadeSeconds(saved.crossfadeSeconds);
+    engine.setSpokenSpeed(saved.spokenSpeed ?? 1);
   }, [engine, saved]);
 
   // Before the preferences are loaded `update` does nothing: the server values win.
@@ -81,9 +110,93 @@ function useSyncedPlayerPreferences(engine: PlayerEngine): void {
     update((current) => {
       const { crossfade, crossfadeSeconds } = current.player;
       if (state.crossfade === crossfade && state.crossfadeSeconds === crossfadeSeconds) return current;
-      return { ...current, player: { crossfade: state.crossfade, crossfadeSeconds: state.crossfadeSeconds } };
+      return {
+        ...current,
+        player: { ...current.player, crossfade: state.crossfade, crossfadeSeconds: state.crossfadeSeconds },
+      };
     });
   }, [state.crossfade, state.crossfadeSeconds, update]);
+}
+
+const NOTICE_MS = 12000;
+
+/**
+ * Audiobooks and podcasts: their position is saved as a bookmark (every few seconds, on
+ * pause, on track change, when the page closes) and they resume there when played again.
+ */
+function useBookmarks(engine: PlayerEngine, client: SubsonicClient): ResumeValue {
+  const clientRef = useRef(client);
+  clientRef.current = client;
+  const [notice, setNotice] = useState<ResumeNotice | null>(null);
+  const keeper = useMemo(
+    () =>
+      createBookmarkKeeper({
+        save: (track, seconds, keepalive) =>
+          void clientRef.current
+            .call("createBookmark", { id: track.id, position: String(Math.round(seconds * 1000)) }, { keepalive })
+            .catch(() => undefined),
+        remove: (track, keepalive) =>
+          void clientRef.current.call("deleteBookmark", { id: track.id }, { keepalive }).catch(() => undefined),
+        // The latest bookmark (another device may have moved it), then resume if still at the start.
+        resume: (track) =>
+          void clientRef.current
+            .call("getSong", { id: track.id })
+            .then(({ song }) => {
+              const seconds = (song.bookmarkPosition ?? 0) / 1000;
+              const duration = song.duration ?? track.durationSeconds ?? 0;
+              const current = engine.getSnapshot();
+              if (current.current?.id !== track.id || engine.currentTime >= STARTED_S) return;
+              if (seconds < RESUME_FROM_S || (duration && seconds >= duration - FINISHED_S)) return;
+              engine.seek(seconds);
+              setNotice({ trackId: track.id, seconds });
+            })
+            .catch(() => undefined),
+      }),
+    [engine],
+  );
+  const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
+  useEffect(() => keeper.update(state), [keeper, state]);
+  useEffect(() => {
+    const leave = () => keeper.leave();
+    window.addEventListener("pagehide", leave);
+    return () => window.removeEventListener("pagehide", leave);
+  }, [keeper]);
+  // The notice goes after a while, or with its track.
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  const currentId = state.current?.id;
+  useEffect(() => {
+    if (notice && currentId !== notice.trackId) setNotice(null);
+  }, [currentId, notice]);
+
+  const startOver = useCallback(() => {
+    engine.seek(0);
+    setNotice(null);
+  }, [engine]);
+  const dismiss = useCallback(() => setNotice(null), []);
+  return useMemo(() => ({ notice, startOver, dismiss }), [notice, startOver, dismiss]);
+}
+
+/** Space: play / pause; ← / →: 10 s back / forward (see shortcuts.ts for when they apply). */
+function useShortcuts(engine: PlayerEngine): void {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const action = shortcutFor(event);
+      const state = engine.getSnapshot();
+      if (!action || !state.current) return;
+      event.preventDefault(); // no page scroll on Space / arrows
+      if (action === "toggle") engine.togglePlay();
+      else {
+        const target = engine.currentTime + (action === "back" ? -SEEK_STEP_S : SEEK_STEP_S);
+        engine.seek(Math.min(Math.max(target, 0), Math.max(state.duration - 0.5, 0)));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [engine]);
 }
 
 /** Playing again after the tab slept: the visualizers' AudioContext must run too. */

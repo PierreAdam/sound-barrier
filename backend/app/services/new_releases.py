@@ -23,7 +23,7 @@ from app.core.db import Database
 from app.core.text import normalize
 from app.external.musicbrainz import ReleaseGroup
 from app.models import Album, Artist, ArtistInfo
-from app.services import discography, server_settings
+from app.services import browsing, discography, server_settings
 from app.services.discography import Category, DiscographyEntry
 
 logger = logging.getLogger(__name__)
@@ -87,7 +87,11 @@ async def _album_artists(session: AsyncSession) -> list[Artist]:
             select(Artist)
             .where(
                 Artist.missing_since.is_(None),
-                Artist.id.in_(select(Album.artist_id).where(Album.missing_since.is_(None))),
+                Artist.id.in_(
+                    select(Album.artist_id).where(
+                        Album.missing_since.is_(None), Album.id.in_(browsing.music_album_ids())
+                    )
+                ),
             )
             .order_by(Artist.sort_name)
         )
@@ -123,7 +127,11 @@ async def new_releases(session: AsyncSession, months: int) -> NewReleases:
     }
     albums: dict[uuid.UUID, list[Album]] = defaultdict(list)
     for album in await session.scalars(
-        select(Album).where(Album.artist_id.in_(ids), Album.missing_since.is_(None))
+        select(Album).where(
+            Album.artist_id.in_(ids),
+            Album.missing_since.is_(None),
+            Album.id.in_(browsing.music_album_ids()),
+        )
     ):
         albums[album.artist_id].append(album)
 

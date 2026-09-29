@@ -134,7 +134,8 @@ class Child(SubsonicModel):
     bit_depth: int | None = None
     sampling_rate: int | None = None
     channel_count: int | None = None
-    media_type: str = "song"
+    media_type: str = "song"  # "audiobook", "podcast" (services/long_form.py)
+    bookmark_position: int | None = None  # ms, where the user stopped
     music_brainz_id: str | None = None
     genres: list[ItemGenre] = Field(default_factory=list[ItemGenre])
     artists: list[ArtistRef] = Field(default_factory=list[ArtistRef])
@@ -426,3 +427,49 @@ class StructuredLyrics(SubsonicModel):
 
 class LyricsList(SubsonicModel):
     structured_lyrics: list[StructuredLyrics] = Field(default_factory=list[StructuredLyrics])
+
+
+class BookmarkItem(SubsonicModel):
+    """getBookmarks: a bookmark and its song."""
+
+    position: int  # ms
+    username: str
+    comment: str | None = None
+    created: datetime
+    changed: datetime
+    entry: Child
+
+
+class Bookmarks(SubsonicModel):
+    bookmark: list[BookmarkItem] = Field(default_factory=list[BookmarkItem])
+
+
+class PodcastEpisode(Child):
+    """A podcast episode or an audiobook chapter (both served as podcasts)."""
+
+    stream_id: str | None = None  # the song, for `stream`
+    channel_id: str | None = None
+    description: str | None = None
+    status: str = "completed"  # downloaded: always, the files are local
+    publish_date: datetime | None = None
+
+
+class PodcastChannel(SubsonicModel):
+    """A podcast show or an audiobook."""
+
+    id: str
+    url: str = ""  # its RSS feed: none, the files are local
+    title: str
+    description: str | None = None
+    cover_art: str | None = None
+    original_image_url: str | None = None
+    status: str = "completed"
+    episode: list[PodcastEpisode] = Field(default_factory=list[PodcastEpisode])
+
+
+class Podcasts(SubsonicModel):
+    channel: list[PodcastChannel] = Field(default_factory=list[PodcastChannel])
+
+
+class NewestPodcasts(SubsonicModel):
+    episode: list[PodcastEpisode] = Field(default_factory=list[PodcastEpisode])

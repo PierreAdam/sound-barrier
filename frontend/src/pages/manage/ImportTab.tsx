@@ -7,9 +7,11 @@ import {
   type FolderEntry,
   type ImportJob,
   type InLibraryFolder,
+  type KindHint,
   type ManageSettings,
 } from "../../api/native";
 import { FolderIcon, MusicNoteIcon } from "../../components/Icons";
+import { useSections } from "../../api/useSections";
 import { formatSize, plural } from "../../format";
 import { settingsUrl } from "../settings/tabs";
 import type { Imports } from "./useImports";
@@ -53,6 +55,12 @@ export function ImportTab({ settings, imports, onReview }: Props) {
 }
 
 type SortOrder = "newest" | "name";
+type ImportAs = "music" | "podcast" | "audiobook";
+
+const KIND_LABELS: Record<ImportAs, string> = { music: "Music", audiobook: "Audiobook", podcast: "Podcast" };
+const KIND_PLURALS: Record<ImportAs, string> = { music: "music", audiobook: "audiobooks", podcast: "podcasts" };
+/** Paths from the server and from the listing compare the same whatever the separators / case. */
+const pathKey = (path: string) => path.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
 
 /** Newest first (the most recent downloads on top), or by name as the server lists them. */
 function sorted(entries: FolderEntry[], order: SortOrder): FolderEntry[] {
@@ -76,7 +84,10 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
   // Album folders of the listing already in the library (an information only).
   const [inLibrary, setInLibrary] = useState<Map<string, InLibraryFolder>>(() => new Map());
   const [order, setOrder] = useState<SortOrder>("newest");
+  const { sections } = useSections();
   const [analyzing, setAnalyzing] = useState(false);
+  // Folders that look like audiobooks / podcasts: the import buttons suggest that kind.
+  const [kinds, setKinds] = useState<Map<string, KindHint>>(() => new Map());
 
   const open = useCallback(async (path?: string) => {
     setError(null);
@@ -113,6 +124,24 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
     };
   }, [listed]);
 
+  useEffect(() => {
+    setKinds(new Map());
+    if (!listed) return;
+    let cancelled = false;
+    api
+      .browseKinds(listed)
+      .then((found) => {
+        if (!cancelled) setKinds(new Map(found.map((h) => [pathKey(h.path), h])));
+      })
+      .catch((e: unknown) => console.error("Cannot tell which folders are audiobooks / podcasts", e));
+    return () => {
+      cancelled = true;
+    };
+  }, [listed]);
+  const kindOf = (path: string) => kinds.get(pathKey(path));
+  // The kinds offered: music, and the sections that are on.
+  const offered: ImportAs[] = ["music", ...(sections.audiobooks ? (["audiobook"] as const) : []), ...(sections.podcasts ? (["podcast"] as const) : [])];
+
   function toggle(path: string) {
     setSelected((previous) => {
       const next = new Set(previous);
@@ -122,11 +151,33 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
     });
   }
 
-  async function startImport(paths: string[]) {
+  /** The kind the folders look like: the one the buttons put forward. */
+  function suggested(paths: string[]): ImportAs {
+    const hinted = paths.map((p) => kindOf(p)?.kind);
+    const spoken = hinted.find((k) => k !== undefined);
+    return spoken && offered.includes(spoken) && hinted.every((k) => k === spoken) ? spoken : "music";
+  }
+
+  async function startImport(paths: string[], importAs: ImportAs) {
+    // Imported as something they do not look like: ask first (the hint can be wrong).
+    const unlike = paths.filter((p) => {
+      const hint = kindOf(p);
+      return hint !== undefined && hint.kind !== importAs;
+    });
+    if (unlike.length) {
+      const hint = kindOf(unlike[0]!)!;
+      const name = unlike[0]!.split(/[\\/]/).pop();
+      const others = unlike.length > 1 ? ` (and ${plural(unlike.length - 1, "other folder")})` : "";
+      const question =
+        `"${name}"${others} looks like ${KIND_PLURALS[hint.kind]} (${hint.reason}).\n\n` +
+        `Import as ${KIND_PLURALS[importAs]} anyway?`;
+      if (!window.confirm(question)) return;
+    }
     setError(null);
     try {
-      const job = await api.startImport(paths);
-      setMessage(`Import #${job.id} started: ${plural(paths.length, "folder")}.`);
+      const job = await api.startImport(paths, importAs);
+      const as = importAs === "music" ? "" : ` as ${importAs === "podcast" ? "podcasts" : "audiobooks"}`;
+      setMessage(`Import #${job.id} started${as}: ${plural(paths.length, "folder")}.`);
       setSelected(new Set());
       await imports.refresh();
     } catch (e) {
@@ -208,6 +259,11 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
                 <span>{entry.name}</span>
               </button>
               {entry.audioFiles > 0 && <span className="text-muted">{plural(entry.audioFiles, "audio file")}</span>}
+              {kindOf(entry.path) && (
+                <span className="badge import-kind" title={`Looks like ${KIND_PLURALS[kindOf(entry.path)!.kind]}: ${kindOf(entry.path)!.reason}`}>
+                  {KIND_LABELS[kindOf(entry.path)!.kind]}
+                </span>
+              )}
               <InLibraryBadge found={inLibrary.get(entry.path)} />
               <Created value={entry.created} />
             </li>
@@ -225,19 +281,21 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
       )}
 
       {listing && (
-        <div className="settings-section__actions">
-          <button
-            className="button button--primary"
-            type="button"
+        <div className="import-actions">
+          <ImportButtons
+            label={`Import selected (${selected.size})`}
+            offered={offered}
+            suggested={suggested([...selected])}
             disabled={selected.size === 0}
-            onClick={() => void startImport([...selected])}
-          >
-            Import selected ({selected.size})
-          </button>
+            onImport={(kind) => void startImport([...selected], kind)}
+          />
           {listing.parent && (
-            <button className="button" type="button" onClick={() => void startImport([listing.path])}>
-              Import this whole folder{audioHere ? ` (${plural(audioHere, "file")} here)` : ""}
-            </button>
+            <ImportButtons
+              label={`Import this whole folder${audioHere ? ` (${plural(audioHere, "file")} here)` : ""}`}
+              offered={offered}
+              suggested={suggested([listing.path])}
+              onImport={(kind) => void startImport([listing.path], kind)}
+            />
           )}
         </div>
       )}
@@ -255,6 +313,55 @@ function Created({ value }: { value: string }) {
 }
 
 /** "In library" on an album folder the library already has; nothing otherwise. */
+/**
+ * "Import … as" with one button per kind: the kind is chosen with the click, there is no
+ * setting to forget. The kind the folders look like is the highlighted one.
+ */
+function ImportButtons({
+  label,
+  offered,
+  suggested,
+  disabled = false,
+  onImport,
+}: {
+  label: string;
+  offered: ImportAs[];
+  suggested: ImportAs;
+  disabled?: boolean;
+  onImport(kind: ImportAs): void;
+}) {
+  if (offered.length === 1) {
+    return (
+      <div className="import-actions__row">
+        <button className="button button--primary" type="button" disabled={disabled} onClick={() => onImport("music")}>
+          {label}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="import-actions__row" role="group" aria-label={label}>
+      <span className="import-actions__label">{label} as</span>
+      {offered.map((kind) => (
+        <button
+          key={kind}
+          className={`button${kind === suggested ? " button--primary" : ""}`}
+          type="button"
+          disabled={disabled}
+          title={
+            kind === "music"
+              ? "Matched with MusicBrainz (beets), into the music library"
+              : "Through the review (metadata, online lookup), one folder each"
+          }
+          onClick={() => onImport(kind)}
+        >
+          {KIND_LABELS[kind]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function InLibraryBadge({ found }: { found: InLibraryFolder | undefined }) {
   if (!found) return null;
   const tracks =
@@ -292,7 +399,9 @@ function RecentImports({ jobs, error, onReview }: { jobs: ImportJob[]; error: st
                 <span className="text-muted">{new Date(job.createdAt).toLocaleString()}</span>
               </div>
               <div className="job-list__sources text-muted">
-                {job.kind === "adopt" && <span className="badge">library → beets</span>} {job.sources.join(" · ")}
+                {job.kind === "adopt" && <span className="badge">library → beets</span>}
+                {job.kind === "podcast" && <span className="badge">podcast</span>}
+                {job.kind === "audiobook" && <span className="badge">audiobook</span>} {job.sources.join(" · ")}
               </div>
               <div className="job-list__counts">
                 {plural(job.tasks.length, "album")}

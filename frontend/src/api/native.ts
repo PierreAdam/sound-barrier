@@ -205,14 +205,107 @@ export interface ImportTask {
   candidates: Candidate[];
   recommendation: "strong" | "medium" | "low" | "none" | null;
   decision: { action: string; candidateId?: string; auto?: boolean } | null;
-  result: { paths: string[]; converted?: number } | null;
+  result: { paths: string[]; converted?: number; folder?: string; skipped?: string[] } | null;
   error: string | null;
   updatedAt: string;
+  /** Audiobooks / podcasts: what the review starts from (snake_case, like items). */
+  spoken?: SpokenReview | null;
+}
+
+/** An audio file of a book / show being imported (its tags). */
+export interface SpokenFile {
+  path: string;
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  album_artist: string | null;
+  composer: string | null;
+  track: number | null;
+  disc: number | null;
+  year: number | null;
+  date: string | null;
+  genre: string | null;
+  duration_ms: number;
+  has_picture: boolean;
+  chapters: number; // inside the file
+}
+
+export interface SpokenEntry {
+  path: string;
+  title: string;
+  date: string | null; // podcasts: YYYY-MM-DD
+}
+
+export interface SpokenProposal {
+  title: string;
+  author: string;
+  narrator: string | null;
+  series: string | null;
+  series_number: string | null;
+  year: number | null;
+  genre: string | null;
+  description: string | null;
+  cover: string | null; // "folder:<path>", "embedded:<path>", "url:<url>"
+  entries: SpokenEntry[];
+}
+
+export interface SpokenReview {
+  kind: "audiobook" | "podcast";
+  folders: string[];
+  images: string[]; // pictures in the folders
+  proposal: SpokenProposal;
+  lookup: { query: { title: string; author: string | null }; errors: string[] };
+}
+
+/** A folder of the import browser that looks like audiobooks / podcasts. */
+export interface KindHint {
+  path: string;
+  kind: "audiobook" | "podcast";
+  reason: string; // e.g. 'genre "Audiobook"'
+}
+
+/** A book / show found online (Audible, Open Library, iTunes). */
+export interface BookCandidate {
+  id: string;
+  source: string;
+  title: string;
+  authors: string[];
+  narrators: string[];
+  series: string | null;
+  series_number: string | null;
+  year: number | null;
+  duration_ms: number | null;
+  description: string | null;
+  genre: string | null;
+  cover_url: string | null;
+  url: string | null;
+  // MusicBrainz: the edition's track count, and its tracks when it matches the files.
+  track_count: number | null;
+  tracks: { title: string; duration_ms: number | null }[];
+  release_group_id: string | null;
+}
+
+/** The reviewed metadata sent back (camelCase). */
+export interface SpokenImport {
+  title: string;
+  author: string;
+  narrator: string | null;
+  series: string | null;
+  seriesNumber: string | null;
+  year: number | null;
+  genre: string | null;
+  description: string | null;
+  cover: string | null;
+  entries: SpokenEntry[];
+  // The MusicBrainz edition used (written to the tags).
+  musicbrainzReleaseId?: string | null;
+  musicbrainzReleaseGroupId?: string | null;
 }
 
 export interface ImportJob {
   id: number;
-  kind: "import" | "adopt"; // adopt: library albums added to beets
+  // adopt: library albums added to beets; podcast / audiobook: reviewed, then placed in that folder
+  kind: "import" | "adopt" | "podcast" | "audiobook";
   sources: string[];
   status: "queued" | "running" | "done" | "failed";
   error: string | null;
@@ -256,9 +349,10 @@ export interface DeleteResult {
 /** Saved on the server: they follow the user from one device to another. */
 export interface UserPreferences {
   theme: Appearance;
-  player: { crossfade: boolean; crossfadeSeconds: number };
+  player: { crossfade: boolean; crossfadeSeconds: number; spokenSpeed: number }; // spokenSpeed: 1 to 2
   /** Release group categories shown in "Missing albums" (e.g. "album", "album+live"). */
   discography: { categories: string[]; recentMonths: number }; // recentMonths: New releases, 1 to 12
+  lyrics: { karaoke: boolean }; // "Now playing": the current line fills word by word
 }
 
 // --- web play queue ------------------------------------------------------------
@@ -289,6 +383,12 @@ export interface ExternalSettings {
   pictureSources: { id: string; label: string; needsKey: string | null }[];
   musicbrainz: boolean; // discographies ("Missing albums" on artist pages)
   lrclib: boolean; // song lyrics from lrclib.net
+  // Audiobook / podcast import review lookups.
+  audible: boolean;
+  audibleRegion: string;
+  audibleRegions: string[];
+  openLibrary: boolean;
+  itunes: boolean;
 }
 
 /** A key: undefined keeps it, "" removes it, else the new key (checked by the server). */
@@ -298,6 +398,10 @@ export interface ExternalSettingsUpdate {
   pictureSource?: string;
   musicbrainz?: boolean;
   lrclib?: boolean;
+  audible?: boolean;
+  audibleRegion?: string;
+  openLibrary?: boolean;
+  itunes?: boolean;
 }
 
 export interface ArtistInfo {
@@ -428,7 +532,36 @@ export interface SongLyrics {
   source: "lrc" | "embedded" | "lrclib" | null;
   synced: boolean; // lines have a start time
   instrumental: boolean;
-  lines: { startMs: number | null; text: string }[];
+  // words: word by word timing ("enhanced LRC"), when the lyrics have it
+  lines: { startMs: number | null; text: string; words: { startMs: number; text: string }[] | null }[];
+}
+
+// --- podcasts and audiobooks ----------------------------------------------------
+
+export type SpokenKind = "podcasts" | "audiobooks";
+
+/** A library section (podcasts / audiobooks): its folder and its admin switch. */
+export interface SpokenFolder {
+  enabled: boolean;
+  folder: LibraryFolder | null;
+}
+
+export interface SpokenShow {
+  id: string;
+  kind: SpokenKind;
+  title: string;
+  author: string;
+  coverArt: string | null;
+  episodes: number;
+  durationMs: number;
+  latest: string | null;
+  started: number; // episodes / chapters with a bookmark
+  played: number;
+}
+
+export interface SpokenPage {
+  continueListening: { show: SpokenShow; episode: Child; changedAt: string }[];
+  shows: SpokenShow[];
 }
 
 // --- tag editor (admins) -----------------------------------------------------
@@ -523,6 +656,16 @@ export const api = {
     }),
 
   getLibraryRevision: () => request<{ revision: number }>("GET", "/library/revision"),
+  getSpokenFolders: () => request<Record<SpokenKind, SpokenFolder>>("GET", "/library/spoken"),
+  /** path: undefined keeps the folder, "" removes it. */
+  setSpokenFolder: (kind: SpokenKind, enabled: boolean, path?: string) =>
+    request<Record<SpokenKind, SpokenFolder>>("PUT", `/library/spoken/${kind}`, { enabled, path }),
+  /** The sections this user has (on, with a folder). */
+  getSections: () => request<Record<SpokenKind, boolean>>("GET", "/library/sections"),
+  getSpokenPage: (kind: SpokenKind) => request<SpokenPage>("GET", `/spoken/${kind}`),
+  getSpokenShow: (id: string) => request<{ show: SpokenShow; episodes: Child[] }>("GET", `/spoken/shows/${id}`),
+  /** Removes the user's bookmarks of a show / book (out of "Continue listening", or started over). */
+  forgetSpokenShow: (id: string) => request<void>("DELETE", `/spoken/shows/${id}/bookmarks`),
   getLibrary: () => request<{ folder: LibraryFolder | null }>("GET", "/library"),
   setLibrary: (path: string, name: string) =>
     request<{ folder: LibraryFolder }>("PUT", "/library", { path, name }),
@@ -539,7 +682,9 @@ export const api = {
   /** The album folders of a listed folder already in the library (tags are read: slower). */
   browseInLibrary: (path?: string) =>
     request<InLibraryFolder[]>("GET", `/manage/browse/in-library${path ? `?path=${encodeURIComponent(path)}` : ""}`),
-  startImport: (paths: string[]) => request<ImportJob>("POST", "/manage/imports", { paths }),
+  /** kind: music (beets matching), or podcast / audiobook (copied as is into that folder). */
+  startImport: (paths: string[], kind: "music" | "podcast" | "audiobook" = "music") =>
+    request<ImportJob>("POST", "/manage/imports", { paths, kind }),
   listImports: () => request<ImportJob[]>("GET", "/manage/imports"),
   getLibraryStatus: () => request<LibraryStatus>("GET", "/manage/library-status"),
   adopt: (paths: string[]) => request<ImportJob>("POST", "/manage/adopt", { paths }),
@@ -556,6 +701,19 @@ export const api = {
     request<ImportTask>("POST", `/manage/tasks/${taskId}/decision`, { action, candidateId }),
   search: (taskId: number, query: { artist?: string; album?: string; releaseId?: string }) =>
     request<ImportTask>("POST", `/manage/tasks/${taskId}/search`, query),
+  importSpoken: (taskId: number, metadata: SpokenImport) =>
+    request<ImportTask>("POST", `/manage/tasks/${taskId}/spoken/import`, metadata),
+  /** Appends a waiting book to another one; returns that one. */
+  mergeSpoken: (taskId: number, into: number) =>
+    request<ImportTask>("POST", `/manage/tasks/${taskId}/spoken/merge`, { into }),
+  lookupSpoken: (taskId: number, title: string, author: string | null) =>
+    request<ImportTask>("POST", `/manage/tasks/${taskId}/spoken/lookup`, { title, author }),
+  /** Preview of a "folder:" / "embedded:" cover of a waiting import. */
+  spokenCoverUrl: (taskId: number, cover: string) =>
+    `/api/manage/tasks/${taskId}/spoken/cover?cover=${encodeURIComponent(cover)}`,
+  /** Folders of a listed folder that look like audiobooks / podcasts (a hint). */
+  browseKinds: (path?: string) =>
+    request<KindHint[]>("GET", `/manage/browse/kinds${path ? `?path=${encodeURIComponent(path)}` : ""}`),
   deleteMusic: (albumIds: string[], songIds: string[]) =>
     request<DeleteResult>("POST", "/manage/delete", { albumIds, songIds }),
 };

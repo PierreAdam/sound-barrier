@@ -528,6 +528,7 @@ class _ScanRun:
             "mbz_track_id": tags.mbz_track_id,
             "artwork_id": artwork_id,
             "file_mtime": file.mtime,
+            "chapters": [{"startMs": c.start_ms, "title": c.title} for c in audio.chapters] or None,
             "missing_since": None,
         }
         statement = insert(Song).values(**values)

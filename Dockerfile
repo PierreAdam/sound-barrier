@@ -27,15 +27,19 @@ RUN pip install --no-cache-dir --no-deps . && rm -rf build
 COPY --from=web /src/dist/ ./web/
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-# Mount points: the library, the import root folder (read-only is fine: imports copy),
-# the beets library, and the application data (secret key, covers cache, staging).
-RUN mkdir -p /music /import /beets /data && chown 1000:1000 /music /import /beets /data \
+# Mount points: the library, the podcasts and audiobooks folders (optional), the import
+# root folder (read-only is fine: imports copy), the beets library, and the application
+# data (secret key, covers cache, staging).
+RUN mkdir -p /music /podcasts /audiobooks /import /beets /data \
+    && chown 1000:1000 /music /podcasts /audiobooks /import /beets /data \
     && chmod 755 /usr/local/bin/entrypoint.sh
 ENV PYTHONUNBUFFERED=1 \
     SOUND_BARRIER_DATA_DIR=/data \
     SOUND_BARRIER_WEB_DIR=/app/web \
     SOUND_BARRIER_INITIAL_LIBRARY_DIR=/music \
     SOUND_BARRIER_INITIAL_IMPORT_DIR=/import \
+    SOUND_BARRIER_INITIAL_PODCASTS_DIR=/podcasts \
+    SOUND_BARRIER_INITIAL_AUDIOBOOKS_DIR=/audiobooks \
     SOUND_BARRIER_BEETS_DIR=/beets
 VOLUME ["/data"]
 

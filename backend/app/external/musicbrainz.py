@@ -167,3 +167,13 @@ async def release_group_of(http: httpx.AsyncClient, release_mbid: str) -> str | 
     data = await _get(http, f"release/{release_mbid}", {"inc": "release-groups"})
     group: dict[str, Any] = (data or {}).get("release-group") or {}
     return group["id"] if isinstance(group.get("id"), str) else None
+
+
+async def search_releases(http: httpx.AsyncClient, query: str, limit: int) -> dict[str, Any]:
+    """Releases matching a search query (MusicBrainz's search syntax)."""
+    return await _get(http, "release", {"query": query, "limit": str(limit)}) or {}
+
+
+async def release(http: httpx.AsyncClient, mbid: str) -> dict[str, Any] | None:
+    """A release with its tracks (media, recordings)."""
+    return await _get(http, f"release/{mbid}", {"inc": "recordings+artist-credits"})

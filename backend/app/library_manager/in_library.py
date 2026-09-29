@@ -36,6 +36,7 @@ from app.library_manager.files import is_audio
 from app.library_manager.imports import IMPORTED
 from app.models import Album, ImportTask, Scan, Song
 from app.scanner.tags import read_audio_file
+from app.services import browsing
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +188,7 @@ async def library_index(session: AsyncSession) -> LibraryIndex:
                 Album.display_artist,
                 Album.mbz_album_id,
                 Album.mbz_release_group_id,
-            ).where(Album.missing_since.is_(None))
+            ).where(Album.missing_since.is_(None), Album.id.in_(browsing.music_album_ids()))
         )
     ).all()
     albums: list[_LibraryAlbum] = []

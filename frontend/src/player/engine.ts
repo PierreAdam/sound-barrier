@@ -2,6 +2,10 @@
 //
 // Two audio elements ("decks") are used so the next track can start while the current
 // one fades out. Only the active deck drives the state shown in the UI.
+//
+// Audiobooks and podcasts ("long-form" tracks) play without shuffle, repeat or crossfade
+// (the settings stay as they are for the music), and "previous" / "next" move by the
+// chapters inside the file when it has some.
 
 import { nextIndex, nextRepeatMode, previousIndex, type RepeatMode, shuffleEntries } from "./queue";
 
@@ -18,6 +22,25 @@ export interface Track {
   suffix?: string;
   size?: number; // bytes
   bitRate?: number; // kbps
+  longForm?: boolean; // an audiobook or a podcast: its position is kept as a bookmark
+  spokenKind?: "podcasts" | "audiobooks"; // the section of a long-form track
+  chapters?: Chapter[]; // inside the file (audiobooks), by start
+}
+
+/** A chapter inside a file ("soft" chapter, from its tags). */
+export interface Chapter {
+  start: number; // seconds
+  title: string;
+}
+
+/** The chapter playing at `position` (seconds), -1 before the first / without chapters. */
+export function chapterIndex(chapters: readonly Chapter[] | undefined, position: number): number {
+  if (!chapters) return -1;
+  let found = -1;
+  chapters.forEach((chapter, i) => {
+    if (chapter.start <= position + CHAPTER_SLACK_SECONDS) found = i;
+  });
+  return found;
 }
 
 /** The subset of HTMLAudioElement the engine uses (lets tests use a fake). */
@@ -27,6 +50,8 @@ export interface AudioLike {
   readonly duration: number;
   volume: number;
   muted: boolean;
+  playbackRate: number;
+  defaultPlaybackRate: number;
   readonly paused: boolean;
   play(): Promise<void>;
   pause(): void;
@@ -53,6 +78,12 @@ export interface PlayerSnapshot {
   hasNext: boolean;
   hasPrevious: boolean;
   canUndo: boolean;
+  /** An audiobook or a podcast is playing: no shuffle, repeat or crossfade. */
+  spoken: boolean;
+  /** The current track's chapter being played (-1: none / no chapters). */
+  chapter: number;
+  /** The current track was started at a chosen position (a chapter): not to be resumed. */
+  positioned: boolean;
 }
 
 /** The queue as saved on the server (see useWebQueue). */
@@ -96,6 +127,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 export const MAX_CROSSFADE_SECONDS = 12;
 /** "Previous" restarts the current track when it has played longer than this. */
 const RESTART_THRESHOLD_SECONDS = 3;
+/** This close before a chapter's start counts as in it (seeks may land a bit early). */
+const CHAPTER_SLACK_SECONDS = 0.5;
 const FADE_TICK_MS = 50;
 const UNDO_LEVELS = 20;
 const DECK_EVENTS = ["timeupdate", "durationchange", "play", "pause", "ended", "error"] as const;
@@ -113,7 +146,11 @@ export class PlayerEngine {
   private fade: { timer: ReturnType<typeof setInterval>; next: number; start: number; ms: number } | null = null;
   private listeners = new Set<() => void>();
   private snapshot: PlayerSnapshot;
+  // Speed of podcasts and audiobooks (music always plays at 1x).
+  private spokenSpeed = 1;
   private history: { original: Entry[]; order: Entry[]; index: number }[] = [];
+  // The entry started at a chosen position (playQueue's `startAt`).
+  private positionedKey: number | null = null;
 
   constructor(options: EngineOptions) {
     this.options = options;
@@ -159,19 +196,27 @@ export class PlayerEngine {
 
   // --- commands -----------------------------------------------------------------
 
-  /** Replaces the queue and starts playing `tracks[startIndex]`. */
-  playQueue(tracks: Track[], startIndex = 0): void {
+  /**
+   * Replaces the queue and starts playing `tracks[startIndex]`, from `startAt` seconds
+   * when given (a chapter). Audiobooks and podcasts are never shuffled.
+   */
+  playQueue(tracks: Track[], startIndex = 0, startAt?: number): void {
     if (this.order.length) this.remember();
     this.original = tracks.map((track) => ({ key: this.nextKey++, track }));
     const first = this.original[startIndex];
-    if (this.prefs.shuffle) {
+    if (this.prefs.shuffle && !first?.track.longForm) {
       this.order = shuffleEntries(this.original, first);
       this.index = first ? 0 : -1;
     } else {
       this.order = [...this.original];
       this.index = first ? startIndex : -1;
     }
+    this.positionedKey = first && startAt !== undefined ? first.key : null;
     this.load(true);
+    if (first && startAt) {
+      this.deck.currentTime = startAt;
+      this.emit();
+    }
   }
 
   /** Appends tracks to the end of the queue. An empty queue gets them without autoplay. */
@@ -286,18 +331,36 @@ export class PlayerEngine {
   }
 
   next(): void {
-    const next = nextIndex(this.index, this.order.length, this.prefs.repeat, false);
+    const chapters = this.currentEntry?.track.chapters;
+    const chapter = chapters?.[chapterIndex(chapters, this.deck.currentTime) + 1];
+    if (chapter) {
+      this.seek(chapter.start);
+      return;
+    }
+    const next = nextIndex(this.index, this.order.length, this.repeatMode, false);
     if (next === null) return;
     this.index = next;
     this.load(true);
   }
 
   previous(): void {
-    if (this.deck.currentTime > RESTART_THRESHOLD_SECONDS) {
+    const position = this.deck.currentTime;
+    const chapters = this.currentEntry?.track.chapters;
+    const current = chapterIndex(chapters, position);
+    if (chapters && current >= 0) {
+      // The chapter's start, or the previous chapter right after it started.
+      const start = chapters[current]?.start ?? 0;
+      const target = position - start > RESTART_THRESHOLD_SECONDS ? start : chapters[current - 1]?.start;
+      if (target !== undefined) {
+        this.seek(target);
+        return;
+      }
+    }
+    if (position > RESTART_THRESHOLD_SECONDS) {
       this.seek(0);
       return;
     }
-    const previous = previousIndex(this.index, this.order.length, this.prefs.repeat);
+    const previous = previousIndex(this.index, this.order.length, this.repeatMode);
     if (previous === null) {
       this.seek(0);
       return;
@@ -329,6 +392,7 @@ export class PlayerEngine {
 
   /** Shuffle randomizes the current queue; turning it off restores the original order. */
   toggleShuffle(): void {
+    if (this.spoken) return;
     const current = this.currentEntry;
     this.prefs.shuffle = !this.prefs.shuffle;
     this.savePreferences();
@@ -344,12 +408,14 @@ export class PlayerEngine {
   }
 
   cycleRepeat(): void {
+    if (this.spoken) return;
     this.prefs.repeat = nextRepeatMode(this.prefs.repeat);
     this.savePreferences();
     this.emit();
   }
 
   toggleCrossfade(): void {
+    if (this.spoken) return;
     this.setCrossfade(!this.prefs.crossfade);
   }
 
@@ -359,6 +425,25 @@ export class PlayerEngine {
     this.savePreferences();
     if (!enabled) this.cancelFade();
     this.emit();
+  }
+
+  /** Playback speed of podcasts and audiobooks (1 to 2); music is not affected. */
+  setSpokenSpeed(speed: number): void {
+    this.spokenSpeed = Math.min(2, Math.max(1, speed));
+    const current = this.currentEntry;
+    if (current) this.applySpeed(this.deck, current.track);
+    this.emit();
+  }
+
+  get currentSpokenSpeed(): number {
+    return this.spokenSpeed;
+  }
+
+  private applySpeed(deck: AudioLike, track: Track): void {
+    const speed = track.longForm ? this.spokenSpeed : 1;
+    // Both: browsers reset playbackRate to defaultPlaybackRate when a new source loads.
+    deck.defaultPlaybackRate = speed;
+    deck.playbackRate = speed;
   }
 
   setCrossfadeSeconds(seconds: number): void {
@@ -425,6 +510,16 @@ export class PlayerEngine {
     return this.order[this.index];
   }
 
+  /** An audiobook or a podcast is playing. */
+  private get spoken(): boolean {
+    return this.currentEntry?.track.longForm ?? false;
+  }
+
+  /** Repeat as it applies now: never for audiobooks and podcasts. */
+  private get repeatMode(): RepeatMode {
+    return this.spoken ? "off" : this.prefs.repeat;
+  }
+
   private load(autoplay: boolean): void {
     this.cancelFade();
     const deck = this.deck;
@@ -437,6 +532,7 @@ export class PlayerEngine {
       return;
     }
     deck.src = this.options.streamUrl(entry.track.id);
+    this.applySpeed(deck, entry.track);
     this.applyVolumes();
     if (autoplay) void deck.play().catch(() => this.emit());
     this.emit();
@@ -457,7 +553,7 @@ export class PlayerEngine {
       this.finishFade();
       return;
     }
-    const next = nextIndex(this.index, this.order.length, this.prefs.repeat, true);
+    const next = nextIndex(this.index, this.order.length, this.repeatMode, true);
     if (next === null) {
       this.emit();
       return;
@@ -473,7 +569,7 @@ export class PlayerEngine {
 
   private maybeStartCrossfade(): void {
     const seconds = this.prefs.crossfadeSeconds;
-    if (!this.prefs.crossfade || this.fade || this.prefs.repeat === "one") return;
+    if (!this.prefs.crossfade || this.fade || this.prefs.repeat === "one" || this.spoken) return;
     const deck = this.deck;
     const duration = deck.duration;
     if (deck.paused || !Number.isFinite(duration) || duration < seconds * 2) return;
@@ -481,10 +577,11 @@ export class PlayerEngine {
     if (remaining > seconds) return;
     const next = nextIndex(this.index, this.order.length, this.prefs.repeat, true);
     const entry = next === null ? undefined : this.order[next];
-    if (next === null || !entry) return;
+    if (next === null || !entry || entry.track.longForm) return;
 
     const incoming = this.otherDeck;
     incoming.src = this.options.streamUrl(entry.track.id);
+    this.applySpeed(incoming, entry.track);
     incoming.volume = 0;
     incoming.muted = this.prefs.muted;
     void incoming.play().catch(() => this.cancelFade());
@@ -547,15 +644,18 @@ export class PlayerEngine {
 
   private buildSnapshot(): PlayerSnapshot {
     const deck = this.deck;
-    const current = this.currentEntry?.track ?? null;
+    const entry = this.currentEntry;
+    const current = entry?.track ?? null;
     const length = this.order.length;
+    const position = deck.currentTime || 0;
+    const chapter = chapterIndex(current?.chapters, position);
     return {
       queue: this.order.map((entry) => entry.track),
       keys: this.order.map((entry) => entry.key),
       index: this.index,
       current,
       playing: current !== null && !deck.paused,
-      position: deck.currentTime || 0,
+      position,
       duration: Number.isFinite(deck.duration) && deck.duration > 0 ? deck.duration : (current?.durationSeconds ?? 0),
       volume: this.prefs.volume,
       muted: this.prefs.muted,
@@ -563,9 +663,14 @@ export class PlayerEngine {
       repeat: this.prefs.repeat,
       crossfade: this.prefs.crossfade,
       crossfadeSeconds: this.prefs.crossfadeSeconds,
-      hasNext: current !== null && nextIndex(this.index, length, this.prefs.repeat, false) !== null,
+      hasNext:
+        current !== null &&
+        (chapter + 1 < (current.chapters?.length ?? 0) || nextIndex(this.index, length, this.repeatMode, false) !== null),
       hasPrevious: current !== null,
       canUndo: this.history.length > 0,
+      spoken: current?.longForm ?? false,
+      chapter,
+      positioned: entry !== undefined && entry.key === this.positionedKey,
     };
   }
 

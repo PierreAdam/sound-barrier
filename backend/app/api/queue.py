@@ -11,8 +11,8 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import Field
 
 from app.api.deps import ApiModel, CurrentCaller, DbSession
+from app.api.songs import web_song
 from app.services import web_queue
-from app.subsonic import mappers
 
 router = APIRouter(prefix="/queue", tags=["queue"])
 
@@ -43,10 +43,7 @@ async def get_queue(caller: CurrentCaller, session: DbSession) -> QueueOut:
     queue = await web_queue.get(session, caller.user)
     return QueueOut(
         revision=queue.revision,
-        songs=[
-            mappers.song(entry).model_dump(mode="json", by_alias=True, exclude_none=True)
-            for entry in queue.songs
-        ],
+        songs=[web_song(entry) for entry in queue.songs],
         original_order=queue.original_order,
         current_index=queue.current_index,
         position_ms=queue.position_ms,

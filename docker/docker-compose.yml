@@ -21,6 +21,10 @@ services:
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
     volumes:
       - ${MUSIC_DIR:?set MUSIC_DIR in .env}:/music
+      # Optional: podcasts and audiobooks, kept apart from the music (turn them on in
+      # Settings → Library). Unset: empty folders next to this file.
+      - ${PODCASTS_DIR:-./podcasts}:/podcasts
+      - ${AUDIOBOOKS_DIR:-./audiobooks}:/audiobooks
       - ${IMPORT_DIR:?set IMPORT_DIR in .env}:/import:ro # imports copy, never modify
       - ${BEETS_DIR:-./beets}:/beets
       - ${DATA_DIR:-./data}:/data

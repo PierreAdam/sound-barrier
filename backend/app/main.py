@@ -37,6 +37,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 session,
                 library_dir=settings.initial_library_dir,
                 import_dir=settings.initial_import_dir,
+                podcasts_dir=settings.initial_podcasts_dir,
+                audiobooks_dir=settings.initial_audiobooks_dir,
             )
             await session.commit()
         app.state.scans = scans = ScanManager(db, workers=settings.scan_workers)
@@ -45,6 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             scans,
             get_tagger(settings),
             staging_root=settings.data_dir / "import-staging",
+            http=lambda: app.state.http,
         )
         await imports.start()
         app.state.discography_sync = discography_sync = DiscographySync(db)

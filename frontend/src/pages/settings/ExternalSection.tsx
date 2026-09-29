@@ -1,6 +1,7 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 
 import { api, type ExternalSettings, type ExternalSettingsUpdate } from "../../api/native";
+import { SecretInput } from "../../components/SecretInput";
 
 const LASTFM_CREATE_URL = "https://www.last.fm/api/account/create";
 const FANART_KEY_URL = "https://fanart.tv/get-an-api-key/";
@@ -118,7 +119,8 @@ export function ExternalSection() {
             )
           }
         />
-        Look up artist discographies on MusicBrainz ("Missing albums" on artist pages, no key needed; kept a day)
+        Use MusicBrainz (no key needed): artist discographies ("Missing albums" on artist pages, kept a day) and
+        audiobook editions in the import review (chapter titles)
       </label>
 
       <label className="checkbox">
@@ -135,7 +137,61 @@ export function ExternalSection() {
         />
         Look up song lyrics on LRCLIB when the files have none (synced lyrics, no key needed; kept on the server)
       </label>
-      {message && <p className={message.ok ? "text-success" : "text-error"}>{message.text}</p>}
+
+      <h3 className="settings-section__subtitle">Audiobook and podcast imports</h3>
+      <p className="text-muted">Candidates shown in the review, to fill in the title, author, narrator, series and cover.</p>
+      <div className="external-lookup">
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={settings.audible}
+            disabled={busy}
+            onChange={(e) =>
+              void save({ audible: e.target.checked }, e.target.checked ? "Audible lookups turned on." : "Audible lookups turned off.")
+            }
+          />
+          Audible (audiobooks: narrator, series, cover; unofficial catalog API, no key needed)
+        </label>
+        <select
+          className="field__input external-lookup__region"
+          aria-label="Audible store"
+          value={settings.audibleRegion}
+          disabled={busy || !settings.audible}
+          onChange={(e) => void save({ audibleRegion: e.target.value }, `Audible store: audible.${e.target.value}.`)}
+        >
+          {settings.audibleRegions.map((region) => (
+            <option key={region} value={region}>
+              audible.{region}
+            </option>
+          ))}
+        </select>
+      </div>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={settings.openLibrary}
+          disabled={busy}
+          onChange={(e) =>
+            void save(
+              { openLibrary: e.target.checked },
+              e.target.checked ? "Open Library lookups turned on." : "Open Library lookups turned off.",
+            )
+          }
+        />
+        Open Library (audiobooks: title, author, year, cover; no key needed)
+      </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={settings.itunes}
+          disabled={busy}
+          onChange={(e) =>
+            void save({ itunes: e.target.checked }, e.target.checked ? "iTunes lookups turned on." : "iTunes lookups turned off.")
+          }
+        />
+        iTunes (podcasts: show name, author, artwork; no key needed)
+      </label>
+      {message &&<p className={message.ok ? "text-success" : "text-error"}>{message.text}</p>}
     </section>
   );
 }
@@ -168,11 +224,7 @@ function KeyField({
           {label} {set ? <span className="badge">configured</span> : <span className="text-muted">(not set)</span>}
         </span>
         <div className="folder-form__row">
-          <input
-            className="field__input"
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
+          <SecretInput
             placeholder={set ? "Enter a new key to replace it" : "Paste the key"}
             value={key}
             onChange={(e) => setKey(e.target.value)}

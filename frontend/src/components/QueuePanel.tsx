@@ -81,15 +81,18 @@ export function QueuePanel({ open, onClose }: { open: boolean; onClose(): void }
             <UndoIcon />
             Undo
           </button>
-          <button
-            className={`action-bar__item${state.shuffle ? " action-bar__item--active" : ""}`}
-            type="button"
-            aria-pressed={state.shuffle}
-            onClick={() => engine.toggleShuffle()}
-          >
-            <ShuffleIcon />
-            Shuffle
-          </button>
+          {/* Not for audiobooks and podcasts. */}
+          {!state.spoken && (
+            <button
+              className={`action-bar__item${state.shuffle ? " action-bar__item--active" : ""}`}
+              type="button"
+              aria-pressed={state.shuffle}
+              onClick={() => engine.toggleShuffle()}
+            >
+              <ShuffleIcon />
+              Shuffle
+            </button>
+          )}
           <button className="action-bar__item" type="button" onClick={removeSelected} disabled={!selected.size}>
             <RemoveIcon />
             Remove selected

@@ -121,6 +121,10 @@ export interface Child {
   artists?: ArtistRef[];
   displayArtist?: string;
   displayAlbumArtist?: string;
+  playCount?: number; // by the user
+  mediaType?: "song" | "audiobook" | "podcast"; // OpenSubsonic
+  bookmarkPosition?: number; // ms: where the user stopped (audiobooks, podcasts)
+  chapters?: { startMs: number; title: string }[]; // inside the file (our /api only, audiobooks)
 }
 
 /** Payload of each method, keyed by method name. */
@@ -147,6 +151,8 @@ export interface SubsonicPayloads {
   deletePlaylist: object;
   search3: { searchResult3: { artist?: ArtistID3[]; album?: AlbumID3[]; song?: Child[] } };
   getSong: { song: Child };
+  createBookmark: object;
+  deleteBookmark: object;
   getScanStatus: { scanStatus: ScanStatus };
   startScan: { scanStatus: ScanStatus };
 }

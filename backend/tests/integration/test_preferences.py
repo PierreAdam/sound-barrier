@@ -8,8 +8,9 @@ pytestmark = pytest.mark.integration
 
 DEFAULTS = {
     "theme": {"mode": "dark", "accent": "teal"},
-    "player": {"crossfade": False, "crossfadeSeconds": 5},
+    "player": {"crossfade": False, "crossfadeSeconds": 5, "spokenSpeed": 1},
     "discography": {"categories": ["album"], "recentMonths": 6},
+    "lyrics": {"karaoke": False},
 }
 
 
@@ -20,8 +21,9 @@ async def test_preferences_are_saved_per_user(
         assert (await client.get("/api/preferences")).json() == DEFAULTS
         wanted = {
             "theme": {"mode": "light", "accent": "violet"},
-            "player": {"crossfade": True, "crossfadeSeconds": 8},
+            "player": {"crossfade": True, "crossfadeSeconds": 8, "spokenSpeed": 1.5},
             "discography": {"categories": ["album", "album+live", "ep"], "recentMonths": 3},
+            "lyrics": {"karaoke": True},
         }
         response = await client.put("/api/preferences", json=wanted)
         assert response.json() == wanted
@@ -40,6 +42,7 @@ async def test_preferences_are_saved_per_user(
         {"theme": {"mode": "neon"}},
         {"theme": {"accent": "Not A Color!"}},
         {"player": {"crossfadeSeconds": 60}},
+        {"player": {"spokenSpeed": 3}},
         {"discography": {"categories": ["Album; DROP"]}},
         {"discography": {"recentMonths": 13}},
     ],

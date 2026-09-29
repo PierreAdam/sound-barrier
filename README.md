@@ -94,6 +94,8 @@ Open `http://<server>:4040` (web UI and Subsonic clients on the same port), sign
 | Mount | Purpose |
 |---|---|
 | `/music` | the library (read-write: imports and deletion) |
+| `/podcasts` | podcasts, optional (`PODCASTS_DIR`; turn them on in Settings → Library) |
+| `/audiobooks` | audiobooks, optional (`AUDIOBOOKS_DIR`; same) |
 | `/import` | import root folder, e.g. your downloads (read-only is enough: imports copy) |
 | `/beets` | beets configuration and database |
 | `/data` | secret key, caches, import staging |

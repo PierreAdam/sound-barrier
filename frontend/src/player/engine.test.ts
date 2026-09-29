@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { type AudioLike, PlayerEngine, type Track } from "./engine";
+import { type AudioLike, chapterIndex, PlayerEngine, type Track } from "./engine";
 import { nextIndex, previousIndex, shuffleEntries } from "./queue";
 
 class FakeAudio implements AudioLike {
+  playbackRate = 1;
+  defaultPlaybackRate = 1;
   src = "";
   currentTime = 0;
   duration = Number.NaN;
@@ -245,6 +247,96 @@ describe("PlayerEngine", () => {
     first.fire("ended");
     expect(engine.getSnapshot().current?.id).toBe("a");
     expect(first.currentTime).toBe(0);
+  });
+});
+
+describe("audiobooks and podcasts", () => {
+  const book: Track[] = [
+    {
+      id: "file1",
+      title: "Book, file 1",
+      longForm: true,
+      chapters: [
+        { start: 0, title: "One" },
+        { start: 60, title: "Two" },
+        { start: 120, title: "Three" },
+      ],
+    },
+    { id: "file2", title: "Book, file 2", longForm: true },
+  ];
+
+  it("finds the chapter at a position", () => {
+    const chapters = book[0]!.chapters;
+    expect(chapterIndex(chapters, 0)).toBe(0);
+    expect(chapterIndex(chapters, 59)).toBe(0);
+    expect(chapterIndex(chapters, 59.8)).toBe(1); // a seek landing just before it
+    expect(chapterIndex(chapters, 500)).toBe(2);
+    expect(chapterIndex(undefined, 10)).toBe(-1);
+  });
+
+  it("moves by the chapters inside the file, then by file", () => {
+    const { engine, decks } = setup();
+    engine.playQueue(book, 0);
+    const deck = decks[0] as FakeAudio;
+    deck.advance(10);
+    expect(engine.getSnapshot().chapter).toBe(0);
+
+    engine.next();
+    expect(deck.currentTime).toBe(60);
+    expect(engine.getSnapshot().chapter).toBe(1);
+    engine.next();
+    expect(deck.currentTime).toBe(120);
+    expect(engine.getSnapshot().hasNext).toBe(true); // the next file
+    engine.next();
+    expect(engine.getSnapshot().current?.id).toBe("file2");
+    deck.currentTime = 0; // a new source starts at 0
+
+    engine.previous(); // at its start: back to the previous file
+    expect(engine.getSnapshot().current?.id).toBe("file1");
+    deck.advance(130);
+    engine.previous(); // 10 s into "Three": its start
+    expect(deck.currentTime).toBe(120);
+    engine.previous(); // right at its start: "Two"
+    expect(deck.currentTime).toBe(60);
+  });
+
+  it("starts at a chosen position, marked so the bookmark does not override it", () => {
+    const { engine, decks } = setup();
+    engine.playQueue(book, 0, 120);
+    expect((decks[0] as FakeAudio).currentTime).toBe(120);
+    expect(engine.getSnapshot().positioned).toBe(true);
+    engine.playQueue(book, 0);
+    expect(engine.getSnapshot().positioned).toBe(false);
+  });
+
+  it("plays them without shuffle, repeat or crossfade, keeping the music settings", () => {
+    const { engine, decks } = setup();
+    engine.toggleShuffle();
+    engine.cycleRepeat(); // all
+    engine.toggleCrossfade();
+    engine.playQueue(book, 0);
+    const state = engine.getSnapshot();
+    expect(state.spoken).toBe(true);
+    expect(state.queue.map((t) => t.id)).toEqual(["file1", "file2"]); // not shuffled
+
+    engine.toggleShuffle();
+    engine.cycleRepeat();
+    engine.toggleCrossfade();
+    expect([engine.getSnapshot().shuffle, engine.getSnapshot().repeat, engine.getSnapshot().crossfade]).toEqual([
+      true,
+      "all",
+      true,
+    ]);
+
+    const [first, second] = decks as [FakeAudio, FakeAudio];
+    engine.next();
+    engine.next();
+    engine.next(); // file2
+    first.advance(199);
+    expect(second.paused).toBe(true); // no crossfade
+    first.fire("ended");
+    expect(engine.getSnapshot().current?.id).toBe("file2"); // no repeat: stays on the last one
+    expect(engine.getSnapshot().index).toBe(1);
   });
 });
 

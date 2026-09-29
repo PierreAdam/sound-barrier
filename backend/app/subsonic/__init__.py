@@ -5,6 +5,7 @@ def build_router() -> APIRouter:
     # Importing the endpoint modules registers their handlers.
     from app.subsonic.endpoints import (
         annotation,
+        bookmarks,
         browsing,
         folders,
         info,
@@ -12,6 +13,7 @@ def build_router() -> APIRouter:
         lyrics,
         media,
         playlists,
+        podcasts,
         queue,
         scanning,
         system,
@@ -21,6 +23,7 @@ def build_router() -> APIRouter:
 
     _ = (
         annotation,
+        bookmarks,
         browsing,
         folders,
         info,
@@ -28,6 +31,7 @@ def build_router() -> APIRouter:
         lyrics,
         media,
         playlists,
+        podcasts,
         queue,
         scanning,
         system,

@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from app.api.deps import AdminCaller, ApiModel, CurrentCaller, DbSession, cipher
 from app.core.config import Settings
-from app.external import ExternalServiceError, fanart
+from app.external import ExternalServiceError, books, fanart
 from app.external.lastfm import InvalidApiKeyError, LastFm
 from app.external.pictures import PROVIDERS
 from app.services import artist_info, media, server_settings
@@ -41,8 +41,14 @@ class ExternalSettingsOut(ApiModel):
     fanart_key_set: bool
     picture_source: str  # "none" or a provider id
     picture_sources: list[PictureSource]
-    musicbrainz: bool  # discographies ("Missing albums" on artist pages)
+    musicbrainz: bool  # discographies ("Missing albums"), audiobook editions (import review)
     lrclib: bool  # song lyrics
+    # Audiobook / podcast import review lookups.
+    audible: bool
+    audible_region: str
+    audible_regions: list[str]
+    open_library: bool
+    itunes: bool
 
 
 class ExternalSettingsIn(ApiModel):
@@ -52,6 +58,10 @@ class ExternalSettingsIn(ApiModel):
     picture_source: str = "deezer"
     musicbrainz: bool | None = None  # None keeps the current choice
     lrclib: bool | None = None  # same
+    audible: bool | None = None  # same
+    audible_region: str | None = None
+    open_library: bool | None = None
+    itunes: bool | None = None
 
 
 def _settings_out(settings: server_settings.ExternalServices) -> ExternalSettingsOut:
@@ -61,6 +71,11 @@ def _settings_out(settings: server_settings.ExternalServices) -> ExternalSetting
         picture_source=settings.picture_source,
         musicbrainz=settings.musicbrainz,
         lrclib=settings.lrclib,
+        audible=settings.audible,
+        audible_region=settings.audible_region,
+        audible_regions=list(books.AUDIBLE_REGIONS),
+        open_library=settings.open_library,
+        itunes=settings.itunes,
         picture_sources=[PictureSource(id="none", label="None")]
         + [
             PictureSource(id=p.id, label=p.label, needs_key=p.needs_key) for p in PROVIDERS.values()
@@ -122,6 +137,14 @@ async def set_external_settings(
         settings.musicbrainz = body.musicbrainz
     if body.lrclib is not None:
         settings.lrclib = body.lrclib
+    if body.audible_region is not None:
+        if body.audible_region not in books.AUDIBLE_REGIONS:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown Audible region")
+        settings.audible_region = body.audible_region
+    for name in ("audible", "open_library", "itunes"):
+        value = getattr(body, name)
+        if value is not None:
+            setattr(settings, name, value)
     await server_settings.set_external_services(session, settings)
     await session.commit()
     return _settings_out(settings)

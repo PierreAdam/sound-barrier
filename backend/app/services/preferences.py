@@ -43,6 +43,8 @@ class ThemePreferences(_Model):
 class PlayerPreferences(_Model):
     crossfade: bool = False
     crossfade_seconds: Annotated[float, Field(ge=1, le=MAX_CROSSFADE_SECONDS)] = 5
+    # Playback speed of podcasts and audiobooks (music always plays at 1x).
+    spoken_speed: Annotated[float, Field(ge=1, le=2)] = 1
 
 
 def _default_categories() -> list[str]:
@@ -66,9 +68,15 @@ class DiscographyPreferences(_Model):
         return sorted(set(value))
 
 
+class LyricsPreferences(_Model):
+    # "Now playing": the current line fills word by word (real word timing when known).
+    karaoke: bool = False
+
+
 class Preferences(_Model):
     theme: ThemePreferences = Field(default_factory=ThemePreferences)
     player: PlayerPreferences = Field(default_factory=PlayerPreferences)
+    lyrics: LyricsPreferences = Field(default_factory=LyricsPreferences)
     discography: DiscographyPreferences = Field(default_factory=DiscographyPreferences)
 
 

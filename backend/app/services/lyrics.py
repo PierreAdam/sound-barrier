@@ -29,14 +29,22 @@ logger = logging.getLogger(__name__)
 
 RETRY_AFTER = timedelta(days=30)  # LRCLIB had nothing, or failed: asked again after that
 _TIMESTAMP = re.compile(r"\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]")
+_WORD_STAMP = re.compile(r"<(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?>")  # enhanced LRC
 _OFFSET = re.compile(r"^\[offset:\s*([+-]?\d+)\]\s*$", re.IGNORECASE | re.MULTILINE)
 _TAG_LINE = re.compile(r"^\[[a-z]+:.*\]\s*$", re.IGNORECASE)  # [ar:...], [ti:...]
+
+
+@dataclass
+class Word:
+    start_ms: int
+    text: str  # with its trailing space, if any
 
 
 @dataclass
 class Line:
     start_ms: int | None  # None: not synced
     text: str
+    words: list[Word] | None = None  # word by word timing ("enhanced LRC"), when known
 
 
 @dataclass
@@ -51,9 +59,31 @@ class LyricsUnavailableError(Exception):
     """No lyrics with the file, and LRCLIB could not be asked (try again later)."""
 
 
+def _millis(minutes: str, seconds: str, fraction: str | None) -> int:
+    return (int(minutes) * 60 + int(seconds)) * 1000 + int((fraction or "0").ljust(3, "0")[:3])
+
+
+def _words(text: str, offset: int) -> tuple[str, list[Word] | None]:
+    """The line's text, and its words when they carry their own times
+    ("<00:12.00>Word <00:12.48>by <00:12.90>word")."""
+    stamps = list(_WORD_STAMP.finditer(text))
+    plain = " ".join(_WORD_STAMP.sub("", text).split())
+    if not stamps:
+        return plain, None
+    words: list[Word] = []
+    for index, stamp in enumerate(stamps):
+        end = stamps[index + 1].start() if index + 1 < len(stamps) else len(text)
+        word = text[stamp.end() : end]
+        if word.strip():
+            spaced = " ".join(word.split()) + (" " if word[-1].isspace() else "")
+            words.append(Word(max(_millis(*stamp.groups()) - offset, 0), spaced))
+    return plain, words or None
+
+
 def parse(text: str) -> tuple[bool, list[Line]]:
     """(synced, lines) of plain or LRC text. An LRC line may carry several timestamps
-    ("[00:12.00][01:30.50]Chorus"); `[offset:+250]` shifts them (positive: earlier)."""
+    ("[00:12.00][01:30.50]Chorus"), and its words their own ("enhanced LRC");
+    `[offset:+250]` shifts them all (positive: earlier)."""
     offset_match = _OFFSET.search(text)
     offset = int(offset_match.group(1)) if offset_match else 0
     timed: list[Line] = []
@@ -61,12 +91,15 @@ def parse(text: str) -> tuple[bool, list[Line]]:
     for raw in text.replace("\r\n", "\n").split("\n"):
         stamps = list(_TIMESTAMP.finditer(raw))
         if stamps:
-            words = _TIMESTAMP.sub("", raw).strip()
+            words, timings = _words(_TIMESTAMP.sub("", raw).strip(), offset)
+            first = max(_millis(*stamps[0].groups()) - offset, 0)
             for stamp in stamps:
-                minutes, seconds, fraction = stamp.groups()
-                millis = int((fraction or "0").ljust(3, "0")[:3])
-                start = (int(minutes) * 60 + int(seconds)) * 1000 + millis - offset
-                timed.append(Line(max(start, 0), words))
+                start = max(_millis(*stamp.groups()) - offset, 0)
+                # A repeated line ("[00:12.00][01:30.50]"): its words move with it.
+                shifted = (
+                    [Word(w.start_ms + start - first, w.text) for w in timings] if timings else None
+                )
+                timed.append(Line(start, words, shifted))
         elif not _TAG_LINE.match(raw.strip()):
             plain.append(Line(None, raw.rstrip()))
     if timed:
@@ -107,7 +140,16 @@ def _read_cache(path: Path) -> tuple[bool, SongLyrics | None]:
     found: dict[str, Any] | None = data.get("lyrics")
     if found is None:
         return datetime.now(UTC) - at < RETRY_AFTER, None
-    lines = [Line(line.get("start_ms"), str(line.get("text", ""))) for line in found["lines"]]
+    lines = [
+        Line(
+            line.get("start_ms"),
+            str(line.get("text", "")),
+            [Word(int(w["start_ms"]), str(w["text"])) for w in line["words"]]
+            if line.get("words")
+            else None,
+        )
+        for line in found["lines"]
+    ]
     lyrics = SongLyrics("lrclib", bool(found["synced"]), lines, bool(found.get("instrumental")))
     return True, lyrics
 

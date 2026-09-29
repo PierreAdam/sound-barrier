@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import type { User } from "../../api/types";
 import { useSession } from "../../auth/AuthContext";
+import { SecretInput } from "../../components/SecretInput";
 
 type Role = "admin" | "user";
 
@@ -122,10 +123,7 @@ function UserRow({
               });
             }}
           >
-            <input
-              className="field__input"
-              type="password"
-              autoComplete="new-password"
+            <SecretInput
               placeholder="New password"
               aria-label={`New password for ${user.username}`}
               required
@@ -199,10 +197,7 @@ function CreateUserForm({
       </label>
       <label className="field">
         <span className="field__label">Password</span>
-        <input
-          className="field__input"
-          type="password"
-          autoComplete="new-password"
+        <SecretInput
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}

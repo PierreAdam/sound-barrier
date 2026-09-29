@@ -5,14 +5,22 @@ import os
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import Field
 
 from app.api.deps import AdminCaller, ApiModel, DbSession
 from app.core.config import Settings
-from app.library_manager import deletion, files, imports, in_library, transcode
+from app.library_manager import (
+    deletion,
+    files,
+    imports,
+    in_library,
+    kind_hints,
+    spoken_review,
+    transcode,
+)
 from app.library_manager import status as library_state
 from app.library_manager.imports import ImportManager, ImportRequestError
 from app.models import ImportJob, ImportTask, MusicFolder
@@ -175,11 +183,39 @@ async def browse_in_library(
     return [InLibraryOut(**vars(f)) for f in found]
 
 
+class KindHintOut(ApiModel):
+    path: str
+    kind: str  # audiobook, podcast
+    reason: str  # e.g. 'genre "Audiobook"'
+
+
+@router.get("/browse/kinds")
+async def browse_kinds(
+    _: AdminCaller, session: DbSession, path: str | None = None
+) -> list[KindHintOut]:
+    """The folders of a listed folder that look like audiobooks or podcasts (names, M4B
+    files, genre tags): the import buttons suggest that kind. The others: nothing known."""
+    root = await _import_root(session)
+    try:
+        target = await asyncio.to_thread(files.ensure_within, path or root, [root])
+        listing = await asyncio.to_thread(files.list_folder, target)
+    except files.OutsideAllowedFolderError:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Outside the import root folder") from None
+    except OSError as error:
+        raise _bad_request(f"Cannot read {path or root}: {error.strerror or error}") from None
+    # The listed folder itself too ("Import this whole folder").
+    folders = [target, *(Path(e.path) for e in listing if e.is_dir)]
+    hints = await asyncio.to_thread(lambda: [kind_hints.hint(f) for f in folders])
+    return [KindHintOut(**vars(h)) for h in hints if h is not None]
+
+
 # --- imports --------------------------------------------------------------------------
 
 
 class ImportRequest(ApiModel):
     paths: list[str]
+    # music: matched with beets; podcast / audiobook: reviewed (spoken_review.py).
+    kind: Literal["music", "podcast", "audiobook"] = "music"
 
 
 class TaskOut(ApiModel):
@@ -194,6 +230,8 @@ class TaskOut(ApiModel):
     result: dict[str, Any] | None
     error: str | None
     updated_at: datetime
+    # Audiobooks / podcasts: {kind, folders, images, proposal, lookup} (snake_case keys).
+    spoken: dict[str, Any] | None = None
 
 
 class JobOut(ApiModel):
@@ -235,7 +273,15 @@ async def start_import(
         sources = [await asyncio.to_thread(files.ensure_within, p, [root]) for p in body.paths]
     except files.OutsideAllowedFolderError:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Outside the import root folder") from None
-    job_id = await _imports(request).create_job(caller.user.id, sources)
+    job_kind = imports.IMPORT
+    if body.kind != "music":
+        folder_kind = imports.SPOKEN_FOLDERS[body.kind]
+        if not await music_folders.get_folder(session, folder_kind):
+            raise _bad_request(f"Set up the {folder_kind} folder first (Settings → Library)")
+        if not (await server_settings.get_spoken_audio(session)).enabled(folder_kind):
+            raise _bad_request(f"Turn {folder_kind} on first (Settings → Library)")
+        job_kind = body.kind
+    job_id = await _imports(request).create_job(caller.user.id, sources, job_kind)
     job = await session.get(ImportJob, job_id)
     assert job is not None
     return _job_out(job, [])
@@ -315,6 +361,112 @@ async def search(
     except ImportRequestError as error:
         raise _bad_request(str(error)) from None
     return await _task(session, task_id)
+
+
+# --- audiobook / podcast review ------------------------------------------------------
+
+
+_MBID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+
+
+class SpokenEntryIn(ApiModel):
+    path: str
+    title: str = Field(min_length=1, max_length=300)
+    date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+
+class SpokenImportIn(ApiModel):
+    """The reviewed metadata of a book / show (spoken_review.SpokenMetadata)."""
+
+    title: str = Field(min_length=1, max_length=300)
+    author: str = Field(default="", max_length=300)
+    narrator: str | None = Field(default=None, max_length=300)
+    series: str | None = Field(default=None, max_length=300)
+    series_number: str | None = Field(default=None, max_length=20)
+    year: int | None = Field(default=None, ge=1000, le=9999)
+    genre: str | None = Field(default=None, max_length=100)
+    description: str | None = Field(default=None, max_length=10_000)
+    cover: str | None = None  # "folder:<path>", "embedded:<path>", "url:<url>"
+    entries: list[SpokenEntryIn] = Field(min_length=1)
+    # The MusicBrainz edition used, if any (written to the tags).
+    musicbrainz_release_id: str | None = Field(default=None, pattern=_MBID)
+    musicbrainz_release_group_id: str | None = Field(default=None, pattern=_MBID)
+
+
+class MergeIn(ApiModel):
+    into: int  # the task to merge into
+
+
+class LookupIn(ApiModel):
+    title: str
+    author: str | None = None
+
+
+def _blank(value: str | None) -> str | None:
+    return value.strip() if value and value.strip() else None
+
+
+@router.post("/tasks/{task_id}/spoken/import")
+async def import_spoken(
+    task_id: int, body: SpokenImportIn, request: Request, _: AdminCaller, session: DbSession
+) -> TaskOut:
+    """Imports a reviewed audiobook / podcast with this metadata."""
+    metadata = spoken_review.SpokenMetadata(
+        title=body.title.strip(),
+        author=body.author.strip(),
+        narrator=_blank(body.narrator),
+        series=_blank(body.series),
+        series_number=_blank(body.series_number),
+        year=body.year,
+        genre=_blank(body.genre),
+        description=_blank(body.description),
+        cover=body.cover or None,
+        entries=[
+            spoken_review.Entry(path=e.path, title=e.title.strip(), date=e.date)
+            for e in body.entries
+        ],
+        musicbrainz_release_id=body.musicbrainz_release_id,
+        musicbrainz_release_group_id=body.musicbrainz_release_group_id,
+    )
+    try:
+        await _imports(request).import_spoken(task_id, metadata)
+    except ImportRequestError as error:
+        raise _bad_request(str(error)) from None
+    return await _task(session, task_id)
+
+
+@router.post("/tasks/{task_id}/spoken/merge")
+async def merge_spoken(
+    task_id: int, body: MergeIn, request: Request, _: AdminCaller, session: DbSession
+) -> TaskOut:
+    """Appends this waiting book's files to another one of the same import."""
+    try:
+        await _imports(request).merge(task_id, body.into)
+    except ImportRequestError as error:
+        raise _bad_request(str(error)) from None
+    return await _task(session, body.into)
+
+
+@router.post("/tasks/{task_id}/spoken/lookup")
+async def lookup_spoken(
+    task_id: int, body: LookupIn, request: Request, _: AdminCaller, session: DbSession
+) -> TaskOut:
+    """Looks the book / show up again online, with another title / author."""
+    try:
+        await _imports(request).lookup(task_id, body.title, _blank(body.author))
+    except ImportRequestError as error:
+        raise _bad_request(str(error)) from None
+    return await _task(session, task_id)
+
+
+@router.get("/tasks/{task_id}/spoken/cover")
+async def spoken_cover(task_id: int, cover: str, request: Request, _: AdminCaller) -> Response:
+    """A cover found in the folders / files of a waiting import (review preview)."""
+    found = await _imports(request).cover(task_id, cover)
+    if found is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such cover")
+    data, mime = found
+    return Response(data, media_type=mime, headers={"Cache-Control": "private, max-age=600"})
 
 
 # --- library status and maintenance ---------------------------------------------------

@@ -181,6 +181,13 @@ export const UserIcon = () => (
   </Icon>
 );
 
+/** Books on a shelf: Library Management. */
+export const LibraryIcon = () => (
+  <Icon>
+    <path {...stroke} d="M4 4v16M9 4v16M14 5l5 15M3 20h18" />
+  </Icon>
+);
+
 /** A record: an artist's discography. */
 export const DiscIcon = () => (
   <Icon>

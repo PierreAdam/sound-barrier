@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 
 import { useAuth } from "../../auth/AuthContext";
+import { SecretInput } from "../../components/SecretInput";
 
 /** The signed-in user's own password (PUT /api/auth/password: keeps this session open). */
 export function PasswordSection() {
@@ -35,10 +36,7 @@ export function PasswordSection() {
       <form className="form-grid" onSubmit={onSubmit}>
         <label className="field">
           <span className="field__label">New password</span>
-          <input
-            className="field__input"
-            type="password"
-            autoComplete="new-password"
+          <SecretInput
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -46,10 +44,7 @@ export function PasswordSection() {
         </label>
         <label className="field">
           <span className="field__label">Confirm new password</span>
-          <input
-            className="field__input"
-            type="password"
-            autoComplete="new-password"
+          <SecretInput
             required
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}

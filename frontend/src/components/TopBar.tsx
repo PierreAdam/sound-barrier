@@ -1,17 +1,28 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
 
+import { useSections } from "../api/useSections";
 import { useAuth, useSession } from "../auth/AuthContext";
 import { BrandLogo } from "./BrandLogo";
 import { Dropdown } from "./Dropdown";
 import { MenuIcon, UserIcon } from "./Icons";
 import { SearchBox } from "./SearchBox";
 
-const NAV_ITEMS = [
+const MUSIC_ITEMS = [
   { to: "/home", label: "Home" },
   { to: "/browse", label: "Browse" },
   { to: "/playlists", label: "Playlists" },
-  { to: "/about", label: "About" },
 ];
+const SPOKEN_ITEMS = [
+  { to: "/podcasts", label: "Podcasts", kind: "podcasts" },
+  { to: "/audiobooks", label: "Audiobooks", kind: "audiobooks" },
+] as const;
+const ABOUT = { to: "/about", label: "About" };
+
+/** The main links: Podcasts / Audiobooks only when an admin turned them on. */
+function useNavItems() {
+  const { sections } = useSections();
+  return [...MUSIC_ITEMS, ...SPOKEN_ITEMS.filter((item) => sections[item.kind]), ABOUT];
+}
 
 /**
  * Brand, main links, search and the user menu. When the bar gets narrow (container
@@ -19,6 +30,7 @@ const NAV_ITEMS = [
  * name goes (the icon stays).
  */
 export function TopBar({ onToggleMenu }: { onToggleMenu(): void }) {
+  const navItems = useNavItems();
   return (
     <header className="topbar">
       <button className="icon-button topbar__menu" type="button" aria-label="Side panel" onClick={onToggleMenu}>
@@ -29,7 +41,7 @@ export function TopBar({ onToggleMenu }: { onToggleMenu(): void }) {
         <span>Sound-Barrier</span>
       </div>
       <nav className="topbar__nav" aria-label="Main">
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -51,7 +63,8 @@ export function TopBar({ onToggleMenu }: { onToggleMenu(): void }) {
 /** The main links in one menu (narrow bar), labelled with the current page. */
 function NavMenu() {
   const location = useLocation();
-  const current = NAV_ITEMS.find((item) => location.pathname.startsWith(item.to));
+  const navItems = useNavItems();
+  const current = navItems.find((item) => location.pathname.startsWith(item.to));
   return (
     <Dropdown
       className="topbar__nav-menu"
@@ -67,7 +80,7 @@ function NavMenu() {
       }
     >
       {(close) =>
-        NAV_ITEMS.map((item) => (
+        navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

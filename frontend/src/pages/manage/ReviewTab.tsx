@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { api, type Candidate, type ImportTask } from "../../api/native";
 import { formatTime, plural } from "../../format";
+import { SpokenReviewCard } from "./SpokenReview";
 import type { Imports } from "./useImports";
 
 /** Albums waiting for a decision: pick a match, import as-is, search, or skip. */
@@ -27,15 +28,27 @@ export function ReviewTab({
   return (
     <div className="review">
       <BulkActions imports={imports} />
-      {imports.review.map((task) => (
-        <ReviewCard
-          key={task.id}
-          task={task}
-          matching={matching}
-          convertLossless={convertLossless}
-          onChange={imports.refresh}
-        />
-      ))}
+      {imports.review.map((task) =>
+        task.spoken ? (
+          <SpokenReviewCard
+            // A merge changes the files: the form starts again from the new proposal.
+            key={`${task.id}-${task.items.length}`}
+            task={task}
+            others={imports.review.filter(
+              (other) => other.spoken && other.id !== task.id && other.jobId === task.jobId && other.status === "pending",
+            )}
+            onChange={imports.refresh}
+          />
+        ) : (
+          <ReviewCard
+            key={task.id}
+            task={task}
+            matching={matching}
+            convertLossless={convertLossless}
+            onChange={imports.refresh}
+          />
+        ),
+      )}
     </div>
   );
 }

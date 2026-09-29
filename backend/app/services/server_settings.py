@@ -74,6 +74,33 @@ async def set_scan_schedule(session: AsyncSession, schedule: ScanSchedule) -> No
     )
 
 
+SPOKEN_KEY = "spoken_audio"
+
+
+class SpokenAudio(BaseModel):
+    """Podcasts and audiobooks (their own folders, menu entries and Subsonic podcast
+    channels): each can be turned off by an admin. Off by default."""
+
+    podcasts: bool = False
+    audiobooks: bool = False
+
+    def enabled(self, kind: str) -> bool:
+        return bool(getattr(self, kind, False))
+
+
+async def get_spoken_audio(session: AsyncSession) -> SpokenAudio:
+    row = await session.get(ServerSetting, SPOKEN_KEY)
+    return SpokenAudio() if row is None else SpokenAudio.model_validate(row.value)
+
+
+async def set_spoken_audio(session: AsyncSession, settings: SpokenAudio) -> None:
+    value = settings.model_dump()
+    statement = insert(ServerSetting).values(key=SPOKEN_KEY, value=value)
+    await session.execute(
+        statement.on_conflict_do_update(index_elements=[ServerSetting.key], set_={"value": value})
+    )
+
+
 EXTERNAL_SERVICES_KEY = "external_services"
 
 
@@ -85,8 +112,13 @@ class ExternalServices(BaseModel):
     lastfm_key_enc: str | None = None
     fanart_key_enc: str | None = None
     picture_source: str = "deezer"  # "none" or an app.external.pictures provider id
-    musicbrainz: bool = True  # artist discographies ("Missing albums")
+    musicbrainz: bool = True  # artist discographies ("Missing albums"), audiobook editions
     lrclib: bool = True  # song lyrics from lrclib.net (when the files have none)
+    # Audiobook / podcast imports: lookups in the review (app.external.books).
+    audible: bool = True
+    audible_region: str = "com"  # api.audible.<region>
+    open_library: bool = True
+    itunes: bool = True  # podcasts
 
 
 async def get_external_services(session: AsyncSession) -> ExternalServices:

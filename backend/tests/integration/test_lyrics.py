@@ -82,15 +82,15 @@ async def test_lyrics_sources(
         tagged = await get("Tagged")
         assert (tagged["source"], tagged["synced"]) == ("lrclib", True)
         assert tagged["lines"] == [
-            {"startMs": 1000, "text": "Hello"},
-            {"startMs": 2500, "text": "World"},
+            {"startMs": 1000, "text": "Hello", "words": None},
+            {"startMs": 2500, "text": "World", "words": None},
         ]
         # A synced .lrc: nothing asked online.
         before = len(lrclib.requests)
         with_file = await get("With File")
         assert (with_file["source"], with_file["lines"]) == (
             "lrc",
-            [{"startMs": 3000, "text": "From the file"}],
+            [{"startMs": 3000, "text": "From the file", "words": None}],
         )
         assert len(lrclib.requests) == before
         # Found by the search, only with about the song's duration.

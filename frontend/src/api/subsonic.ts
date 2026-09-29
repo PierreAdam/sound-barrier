@@ -66,7 +66,12 @@ export class SubsonicClient {
     return `${this.baseUrl}/${method}?${this.query(params).toString()}`;
   }
 
-  async call<M extends SubsonicMethod>(method: M, params: Params = {}): Promise<SubsonicResponse<M>> {
+  /** `keepalive`: the request finishes even if the page is closed (e.g. saving a bookmark). */
+  async call<M extends SubsonicMethod>(
+    method: M,
+    params: Params = {},
+    options: { keepalive?: boolean } = {},
+  ): Promise<SubsonicResponse<M>> {
     const query = this.query({ ...params, f: "json" });
     let response: Response;
     try {
@@ -74,6 +79,7 @@ export class SubsonicClient {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: query,
+        keepalive: options.keepalive,
       });
     } catch (cause) {
       console.error(`Subsonic ${method} request failed`, cause);

@@ -4,6 +4,9 @@ from app.models import Directory
 from app.services.browsing import AlbumEntry, ArtistEntry, NamedRef, SongEntry
 from app.subsonic import schemas
 
+# OpenSubsonic mediaType of a song, from the kind of its library folder.
+_MEDIA_TYPES = {"podcasts": "podcast", "audiobooks": "audiobook"}
+
 
 def _ref(ref: NamedRef) -> schemas.ArtistRef:
     return schemas.ArtistRef(id=str(ref.id), name=ref.name)
@@ -123,6 +126,8 @@ def song(entry: SongEntry) -> schemas.Child:
         user_rating=entry.rating,
         play_count=entry.play_count,
         played=entry.last_played_at,
+        media_type=_MEDIA_TYPES.get(entry.folder_kind, "song"),
+        bookmark_position=entry.bookmark_ms,
         bit_depth=s.bit_depth,
         sampling_rate=s.sample_rate,
         channel_count=s.channels,

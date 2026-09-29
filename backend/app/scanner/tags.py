@@ -347,9 +347,18 @@ class AudioInfo:
 
 
 @dataclass(frozen=True)
+class Chapter:
+    """A chapter inside a file (MP4 / M4B chapter list, ID3 CHAP frames)."""
+
+    start_ms: int
+    title: str
+
+
+@dataclass(frozen=True)
 class AudioFile:
     tags: TrackTags
     info: AudioInfo
+    chapters: list[Chapter] = field(default_factory=list[Chapter])
 
 
 def _values(raw: RawTags, key: str, *, split: str | None = None) -> list[str]:
@@ -505,6 +514,32 @@ def _audio_info(audio: Any, size: int) -> AudioInfo:
     )
 
 
+def _chapters(audio: Any, duration_ms: int) -> list[Chapter]:
+    """The file's chapters by start, when it has at least two (a single chapter is the
+    file itself). Untitled ones are numbered."""
+    found: list[tuple[int, str]] = []
+    try:
+        if isinstance(audio.tags, ID3):
+            for frame in audio.tags.getall("CHAP"):
+                title = frame.sub_frames.get("TIT2")
+                found.append((int(frame.start_time), str(title.text[0]) if title else ""))
+        elif getattr(audio, "chapters", None):
+            found = [(round(c.start * 1000), c.title or "") for c in audio.chapters]
+    except Exception as error:  # a damaged chapter list: the file still plays
+        logger.warning("Cannot read the chapters of %s: %s", audio.filename, error)
+        return []
+    starts: dict[int, str] = {}
+    for start, title in sorted(found):
+        if 0 <= start < max(duration_ms, 1):
+            starts.setdefault(start, title.strip())
+    if len(starts) < 2:
+        return []
+    return [
+        Chapter(start, title or f"Chapter {i}")
+        for i, (start, title) in enumerate(starts.items(), 1)
+    ]
+
+
 def read_audio_file(path: Path) -> AudioFile | None:
     """Returns None when the file is not a readable audio file."""
     try:
@@ -515,9 +550,11 @@ def read_audio_file(path: Path) -> AudioFile | None:
     if audio is None:
         return None
     raw, has_picture = _raw_tags(audio)
+    info = _audio_info(audio, path.stat().st_size)
     return AudioFile(
         tags=build_track_tags(raw, has_picture=has_picture),
-        info=_audio_info(audio, path.stat().st_size),
+        info=info,
+        chapters=_chapters(audio, info.duration_ms),
     )
 
 

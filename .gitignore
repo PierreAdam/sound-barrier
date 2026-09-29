@@ -16,6 +16,8 @@ htmlcov/
 !.env.example
 backend/data/
 music/
+podcasts/
+audiobooks/
 # Runtime folders of the production compose file, when kept next to it
 docker/beets/
 docker/data/

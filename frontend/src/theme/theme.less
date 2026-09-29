@@ -116,7 +116,10 @@
 @topbar-height: 56px;
 @player-height: 88px;
 @sidepanel-width: 240px;
-@album-card-width: 170px;
+// Album cards: at least this wide; they share the row and grow until one more fits, so
+// with 3 or more per row they stay between 200 and ~270 px (CSS pixels: the same size
+// whatever the screen's display scaling).
+@album-card-width: 200px;
 @breakpoint-narrow: 760px;
 
 @scrollbar-size: 10px;
@@ -368,6 +371,12 @@ a {
   }
 }
 
+// A secret that is not a sign-in (SecretInput): a text field, its characters hidden, so
+// password managers do not take it for a login.
+.secret-input {
+  -webkit-text-security: disc;
+}
+
 .checkbox {
   display: flex;
   align-items: center;
@@ -390,6 +399,12 @@ a {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+
+  // Neutral (an information, not a highlight).
+  &--muted {
+    background: color-mix(in srgb, @color-text-muted 18%, transparent);
+    color: @color-text-muted;
+  }
 }
 
 .slider {
@@ -819,13 +834,47 @@ a {
 // Side panel: artist index, letter bar -----------------------------------------
 
 .sidepanel {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   border-right: 1px solid @color-border;
   background: @color-surface;
 
+  // Admins: Library Management, above the artists.
+  &__pages {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 2px;
+    padding: @space-3;
+    border-bottom: 1px solid @color-border;
+  }
+
+  &__page {
+    display: flex;
+    align-items: center;
+    gap: @space-3;
+    padding: @space-2 @space-3;
+    border-radius: @radius-sm;
+    color: @color-text-muted;
+    transition:
+      background @transition,
+      color @transition;
+
+    &:hover {
+      background: @color-surface-hover;
+      color: @color-text;
+    }
+
+    &--active {
+      background: @color-surface-raised;
+      color: @color-text;
+    }
+  }
+
   &__artists {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: @space-2 0 @space-3;
   }
@@ -837,6 +886,7 @@ a {
 
   &__letters {
     display: flex;
+    flex: none;
     flex-wrap: wrap;
     gap: 2px;
     padding: @space-2 @space-3;
@@ -907,7 +957,6 @@ a {
   display: flex;
   flex-direction: column;
   gap: @space-5;
-  max-width: 1400px;
 
   &__header {
     display: flex;
@@ -1308,6 +1357,10 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .browser__analyzing {
     animation: none;
+  }
+
+  .lyrics--synced .lyrics__line {
+    transition: none;
   }
 }
 
@@ -1832,6 +1885,7 @@ a {
     flex-direction: column;
     gap: @space-2;
     min-width: 0;
+    max-width: 90ch; // readable lines on wide screens (pages have no maximum width)
   }
 
   @media (max-width: @breakpoint-narrow) {
@@ -2081,6 +2135,11 @@ a {
 
   &__title {
     font-size: @font-size-lg;
+  }
+
+  &__subtitle {
+    margin-top: @space-3;
+    font-size: @font-size-base;
   }
 
   &__actions {
@@ -2863,6 +2922,225 @@ select.field__input {
   }
 }
 
+// Settings → External services: the Audible switch and its store.
+.external-lookup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: @space-3;
+
+  &__region {
+    width: auto;
+  }
+}
+
+// Review of an audiobook / podcast import: candidates, then cover + form, chapters.
+.spoken-review {
+  > .spoken-review__candidates,
+  > .spoken-review__form {
+    align-self: stretch;
+  }
+
+  &__heading {
+    margin: 0 0 @space-2;
+    font-size: @font-size-sm;
+    font-weight: 600;
+  }
+
+  &__candidates {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: @space-2;
+  }
+
+  &__candidate-list {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    gap: @space-2;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__candidate {
+    display: flex;
+    align-items: center;
+    gap: @space-3;
+    padding: @space-2;
+    border: 1px solid @color-border;
+    border-radius: @radius-sm;
+    background: @color-surface-raised;
+  }
+
+  &__candidate-cover {
+    width: 48px;
+    height: 48px;
+    flex: none;
+    border-radius: @radius-sm;
+    background: @color-border;
+    object-fit: cover;
+  }
+
+  &__candidate-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+
+    > * {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    > .text-warning {
+      white-space: normal;
+    }
+  }
+
+  // "Use" and, for a MusicBrainz edition matching the files, "Use chapter titles".
+  &__candidate-actions {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: @space-1;
+
+    .button {
+      justify-content: center;
+    }
+  }
+
+  &__small {
+    font-size: @font-size-xs;
+  }
+
+  &__search {
+    display: flex;
+    flex-wrap: wrap;
+    gap: @space-2;
+
+    .field__input {
+      width: 220px;
+    }
+  }
+
+  &__form {
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: @space-4;
+
+    @media (max-width: @breakpoint-narrow) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    > .spoken-review__entries,
+    > .spoken-review__target,
+    > .settings-section__actions {
+      grid-column: 1 / -1;
+    }
+  }
+
+  &__cover {
+    display: flex;
+    flex-direction: column;
+    gap: @space-2;
+  }
+
+  &__cover-image {
+    width: 180px;
+    height: 180px;
+    border-radius: @radius-sm;
+    background: @color-surface-raised;
+    object-fit: cover;
+  }
+
+  &__cover-none {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: @color-text-muted;
+    font-size: @font-size-sm;
+  }
+
+  &__fields {
+    display: flex;
+    flex-direction: column;
+    gap: @space-2;
+  }
+
+  &__row {
+    display: flex;
+    gap: @space-3;
+
+    > .field {
+      flex: 1;
+    }
+
+    > .spoken-review__small-field {
+      flex: 0 0 100px;
+    }
+  }
+
+  &__description {
+    resize: vertical;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: @space-1;
+    max-height: 420px;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+  }
+
+  &__entry {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto minmax(0, 220px);
+    align-items: center;
+    gap: @space-2;
+  }
+
+  &__date {
+    width: 150px;
+  }
+
+  &__move {
+    display: flex;
+
+    .icon-button {
+      width: 28px;
+      height: 28px;
+    }
+  }
+
+  &__file {
+    overflow: hidden;
+    font-size: @font-size-xs;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__target code {
+    font-size: @font-size-xs;
+  }
+
+  &__merge {
+    display: flex;
+    gap: @space-2;
+
+    .field__input {
+      width: auto;
+      max-width: 260px;
+    }
+  }
+}
+
 .candidates {
   font-size: @font-size-sm;
 
@@ -3324,6 +3602,20 @@ select.field__input {
     font-size: @font-size-sm;
   }
 
+  // "Resumed at 12:34 · Start over" (audiobooks, podcasts), in place of the artist.
+  &__resumed {
+    overflow: hidden;
+    color: @color-accent;
+    font-size: @font-size-sm;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    .link-button {
+      font-size: inherit;
+      text-decoration: underline;
+    }
+  }
+
   &__controls {
     display: flex;
     align-items: center;
@@ -3545,11 +3837,30 @@ select.field__input {
     margin-top: auto;
   }
 
+  // The lyrics column: the karaoke switch above the scrolling lyrics.
+  &__lyrics-panel {
+    position: relative;
+    min-height: 0;
+    height: 100%;
+  }
+
+  &__karaoke {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    right: @space-6 + @space-4; // left of the close button
+    display: flex;
+    align-items: center;
+    gap: @space-2;
+  }
+
   &__lyrics {
     overflow-y: auto;
     height: 100%;
-    padding: 30vh @space-4 30vh 0;
+    // Half the panel above and below the lyrics: every line, the first too, can be centered.
+    padding: ~"calc(50vh - 110px)" @space-4 ~"calc(50vh - 110px)" 0;
     mask-image: linear-gradient(transparent, #000 15%, #000 85%, transparent);
+    scrollbar-width: thin;
   }
 
   &__empty {
@@ -3591,20 +3902,60 @@ select.field__input {
   line-height: 1.5;
   list-style: none;
 
+  // Synced: the current line in full, the others fading with their distance to it. Only
+  // color, opacity and scale change (no weight change: no reflow, no jump).
   &--synced &__line {
     color: @color-text-muted;
-    transition: color @transition, transform @transition;
-  }
+    font-weight: 600;
+    opacity: 0.35;
+    transform-origin: left center;
+    transition:
+      color 450ms ease,
+      opacity 450ms ease,
+      transform 450ms cubic-bezier(0.2, 0.7, 0.2, 1);
 
-  &__line--past {
-    opacity: 0.7;
+    &[data-distance="2"] {
+      opacity: 0.55;
+    }
+
+    &[data-distance="1"] {
+      opacity: 0.8;
+    }
   }
 
   &--synced &__line--active {
     color: @color-text;
-    font-weight: 700;
-    transform: scale(1.03);
-    transform-origin: left center;
+    opacity: 1;
+    transform: scale(1.04);
+  }
+
+  // Karaoke: each word fills with the accent color; a small glowing cursor rides the fill.
+  &__word {
+    --fill: 0;
+    position: relative;
+    background-image: linear-gradient(
+      90deg,
+      @color-accent 0,
+      @color-accent ~"calc(var(--fill) * 100%)",
+      @color-text ~"calc(var(--fill) * 100%)"
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+
+    &--current::after {
+      content: "";
+      position: absolute;
+      bottom: 0.05em;
+      left: ~"calc(var(--fill) * 100%)";
+      width: 6px;
+      height: 6px;
+      border-radius: @radius-round;
+      background: @color-accent;
+      box-shadow: 0 0 8px @color-accent;
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
   }
 
   &__seek {
@@ -3620,6 +3971,337 @@ select.field__input {
       color: @color-accent;
     }
   }
+}
+
+// Podcasts and audiobooks ----------------------------------------------------------
+
+.spoken {
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: @space-3;
+  }
+
+  &__heading {
+    font-size: @font-size-lg;
+    font-weight: 600;
+  }
+
+  &__small {
+    font-size: @font-size-xs;
+  }
+
+  &__meter {
+    max-width: 320px;
+    margin-top: 0;
+  }
+
+  &__badge {
+    margin-left: @space-2;
+  }
+
+  // "Continue listening": one row per show / book started.
+  &__resume-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+    gap: @space-3;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__resume {
+    display: flex;
+    align-items: center;
+    gap: @space-3;
+    padding: @space-3;
+    border: 1px solid @color-border;
+    border-radius: @radius-md;
+    background: @color-surface;
+  }
+
+  // Resume above Dismiss: the title keeps the room.
+  &__resume-actions {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: @space-2;
+
+    .button {
+      justify-content: center;
+    }
+  }
+
+  &__resume-cover {
+    width: 64px;
+    flex: none;
+    border-radius: @radius-sm;
+  }
+
+  &__resume-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+
+    > span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__resume-show {
+    font-weight: 600;
+
+    &:hover {
+      color: @color-accent;
+    }
+  }
+
+  &__card {
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__header {
+    display: flex;
+    align-items: flex-end;
+    gap: @space-5;
+
+    @media (max-width: @breakpoint-narrow) {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+
+  &__cover {
+    width: 220px;
+    flex: none;
+    border-radius: @radius-md;
+    box-shadow: @shadow-card;
+  }
+
+  &__header-text {
+    display: flex;
+    flex-direction: column;
+    gap: @space-2;
+    min-width: 0;
+  }
+
+  &__author {
+    color: @color-text;
+    font-size: @font-size-lg;
+  }
+
+  &__book-progress {
+    display: flex;
+    flex-direction: column;
+    gap: @space-1;
+  }
+
+  &__episodes {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    border: 1px solid @color-border;
+    border-radius: @radius-md;
+    list-style: none;
+  }
+
+  &__episode {
+    display: flex;
+    align-items: center;
+    gap: @space-3;
+    padding: @space-2 @space-3;
+
+    & + & {
+      border-top: 1px solid @color-border;
+    }
+
+    &--playing .spoken__episode-title {
+      color: @color-accent;
+    }
+  }
+
+  &__episode-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__episode-title {
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // The chapters inside a file ("soft" chapters), indented under it.
+  &__soft {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: @space-1;
+    margin-top: @space-2;
+    padding-left: @space-5;
+    border-left: 2px solid @color-border;
+  }
+
+  &__soft-list {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__soft-chapter {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: @space-3;
+    padding: 2px 0;
+
+    .icon-button {
+      width: 28px;
+      height: 28px;
+    }
+
+    .spoken__meter {
+      grid-column: 2 / 4;
+    }
+
+    &--current .spoken__soft-title {
+      color: @color-accent;
+      font-weight: 600;
+    }
+  }
+
+  &__soft-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__soft-toggle {
+    font-size: @font-size-sm;
+  }
+}
+
+// Player bar: where the chapters inside the file start, on the progress line.
+.player__chapter-marks {
+  position: absolute;
+  top: -1.5px;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  pointer-events: none;
+
+  span {
+    position: absolute;
+    width: 2px;
+    height: 100%;
+    background: @color-surface;
+  }
+}
+
+.player__chapter {
+  color: @color-text;
+}
+
+// Now playing, audiobooks: the chapters inside the file instead of lyrics.
+.now-playing__chapters {
+  overflow-y: auto;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0 @space-4 0 0;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.now-playing__chapter {
+  display: flex;
+  justify-content: space-between;
+  gap: @space-4;
+  width: 100%;
+  padding: @space-2 @space-3;
+  border: 0;
+  border-radius: @radius-sm;
+  background: none;
+  color: @color-text;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: @color-surface;
+  }
+
+  &--current {
+    color: @color-accent;
+    font-weight: 600;
+  }
+}
+
+.now-playing__chapter-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Settings: a podcasts / audiobooks folder with its switch.
+.spoken-settings {
+  padding-top: @space-3;
+  border-top: 1px solid @color-border;
+
+  &__switch {
+    gap: @space-2;
+    color: @color-text;
+  }
+}
+
+// Player bar: −15 / +30 and the speed (podcasts, audiobooks).
+.player__skip,
+.player__speed {
+  width: auto;
+  min-width: 36px;
+  padding: 0 @space-1;
+  font-size: @font-size-xs;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+// Import tab: "Import selected (2) as [Music] [Audiobook] [Podcast]", the kind the
+// folders look like highlighted.
+.import-actions {
+  display: flex;
+  flex-direction: column;
+  gap: @space-2;
+
+  &__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: @space-2;
+  }
+
+  &__label {
+    min-width: 180px;
+    color: @color-text-muted;
+    font-size: @font-size-sm;
+  }
+}
+
+.import-kind {
+  background: color-mix(in srgb, @color-accent 18%, transparent);
+  color: @color-accent;
 }
 
 // Player bar: collapsing -------------------------------------------------------

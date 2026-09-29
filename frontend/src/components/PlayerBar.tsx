@@ -2,7 +2,10 @@ import { type CSSProperties, type JSX, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { formatTime } from "../format";
-import { usePlayer } from "../player/PlayerContext";
+import { usePlayer, useResumeNotice } from "../player/PlayerContext";
+import { usePreferences } from "../preferences/PreferencesContext";
+import { keepFocus } from "../player/shortcuts";
+import { albumUrl, artistUrl } from "../player/tracks";
 import { CoverArt } from "./CoverArt";
 import { Dropdown } from "./Dropdown";
 import { useNowPlaying } from "./NowPlaying";
@@ -21,6 +24,9 @@ import {
   VisualizerIcon,
   VolumeIcon,
 } from "./Icons";
+
+// Playback speeds of podcasts and audiobooks (the speed button cycles through them).
+const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
 
 // The small visualizer of the player bar: per browser, like the volume.
 const MINI_VISUALIZER_KEY = "sb.player.visualizer";
@@ -45,7 +51,22 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
   const disabled = current === null;
   const progress = state.duration > 0 ? Math.min(100, (state.position / state.duration) * 100) : 0;
   const nowPlaying = useNowPlaying();
+  const resume = useResumeNotice();
+  const { preferences, update } = usePreferences();
+  // Podcasts and audiobooks: short skips and a playback speed (music plays at 1x).
+  const spoken = current?.longForm ?? false;
+  const speed = preferences?.player.spokenSpeed ?? 1;
+  const skip = (seconds: number) =>
+    engine.seek(Math.min(Math.max(engine.currentTime + seconds, 0), Math.max(state.duration - 0.5, 0)));
+  const nextSpeed = () => {
+    const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] ?? 1;
+    update((current) => ({ ...current, player: { ...current.player, spokenSpeed: next } }));
+  };
   const [miniVisualizer, setMiniVisualizer] = useState(storedVisualizer);
+  const chapters = current?.chapters;
+  const chapter = chapters?.[state.chapter];
+  const titleUrl = current && albumUrl(current);
+  const artistLink = current && artistUrl(current);
 
   function toggleVisualizer() {
     const next = !miniVisualizer;
@@ -58,7 +79,8 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
   }
 
   return (
-    <footer className="player" aria-label="Player">
+    // Mouse clicks on its buttons do not focus them: Space then still plays / pauses.
+    <footer className="player" aria-label="Player" onMouseDown={keepFocus}>
       <input
         className="player__seek"
         type="range"
@@ -71,6 +93,14 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
         style={{ "--progress": `${progress}%` } as CSSProperties}
         onChange={(e) => engine.seek(Number(e.target.value))}
       />
+      {chapters && state.duration > 0 && (
+        // Where the chapters inside the file start.
+        <div className="player__chapter-marks" aria-hidden="true">
+          {chapters.slice(1).map((c) => (
+            <span key={c.start} style={{ left: `${(c.start / state.duration) * 100}%` }} />
+          ))}
+        </div>
+      )}
 
       <div className="player__track">
         <button
@@ -86,11 +116,24 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
           {current ? (
             <>
               <span className="player__title" title={current.title}>
-                {current.albumId ? <Link to={`/albums/${current.albumId}`}>{current.title}</Link> : current.title}
+                {titleUrl ? <Link to={titleUrl}>{current.title}</Link> : current.title}
               </span>
-              <span className="player__artist" title={current.artist}>
-                {current.artistId ? <Link to={`/artists/${current.artistId}`}>{current.artist}</Link> : current.artist}
-              </span>
+              {resume.notice?.trackId === current.id ? (
+                <span className="player__resumed" role="status">
+                  Resumed at {formatTime(resume.notice.seconds)} ·{" "}
+                  <button className="link-button" type="button" onClick={resume.startOver}>
+                    Start over
+                  </button>
+                </span>
+              ) : chapter ? (
+                <span className="player__artist" title={`${chapter.title} · ${current.artist ?? ""}`}>
+                  <span className="player__chapter">{chapter.title}</span> · {current.artist}
+                </span>
+              ) : (
+                <span className="player__artist" title={current.artist}>
+                  {artistLink ? <Link to={artistLink}>{current.artist}</Link> : current.artist}
+                </span>
+              )}
             </>
           ) : (
             <>
@@ -103,19 +146,34 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
       </div>
 
       <div className="player__controls">
+        {/* Shuffle, repeat and crossfade: not for audiobooks and podcasts. */}
+        {!state.spoken && (
+          <button
+            className={`icon-button player__shuffle${state.shuffle ? " icon-button--active" : ""}`}
+            type="button"
+            aria-label="Shuffle"
+            aria-pressed={state.shuffle}
+            title={state.shuffle ? "Shuffle: on" : "Shuffle: off"}
+            onClick={() => engine.toggleShuffle()}
+          >
+            <ShuffleIcon />
+          </button>
+        )}
         <button
-          className={`icon-button player__shuffle${state.shuffle ? " icon-button--active" : ""}`}
+          className="icon-button player__previous"
           type="button"
-          aria-label="Shuffle"
-          aria-pressed={state.shuffle}
-          title={state.shuffle ? "Shuffle: on" : "Shuffle: off"}
-          onClick={() => engine.toggleShuffle()}
+          aria-label={chapters ? "Previous chapter" : "Previous"}
+          title={chapters ? "Previous chapter" : undefined}
+          disabled={disabled}
+          onClick={() => engine.previous()}
         >
-          <ShuffleIcon />
-        </button>
-        <button className="icon-button player__previous" type="button" aria-label="Previous" disabled={disabled} onClick={() => engine.previous()}>
           <PreviousIcon />
         </button>
+        {spoken && (
+          <button className="icon-button player__skip" type="button" aria-label="15 seconds back" onClick={() => skip(-15)}>
+            −15
+          </button>
+        )}
         <button
           className="icon-button icon-button--primary"
           type="button"
@@ -125,21 +183,47 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
         >
           {state.playing ? <PauseIcon /> : <PlayIcon />}
         </button>
-        <button className="icon-button" type="button" aria-label="Next" disabled={!state.hasNext} onClick={() => engine.next()}>
+        {spoken && (
+          <button className="icon-button player__skip" type="button" aria-label="30 seconds forward" onClick={() => skip(30)}>
+            +30
+          </button>
+        )}
+        <button
+          className="icon-button"
+          type="button"
+          aria-label={chapters ? "Next chapter" : "Next"}
+          title={chapters ? "Next chapter" : undefined}
+          disabled={!state.hasNext}
+          onClick={() => engine.next()}
+        >
           <NextIcon />
         </button>
-        <button
-          className={`icon-button player__repeat${state.repeat !== "off" ? " icon-button--active" : ""}`}
-          type="button"
-          aria-label={REPEAT_LABELS[state.repeat]}
-          title={REPEAT_LABELS[state.repeat]}
-          onClick={() => engine.cycleRepeat()}
-        >
-          <RepeatIcon one={state.repeat === "one"} />
-        </button>
+        {!state.spoken && (
+          <button
+            className={`icon-button player__repeat${state.repeat !== "off" ? " icon-button--active" : ""}`}
+            type="button"
+            aria-label={REPEAT_LABELS[state.repeat]}
+            title={REPEAT_LABELS[state.repeat]}
+            onClick={() => engine.cycleRepeat()}
+          >
+            <RepeatIcon one={state.repeat === "one"} />
+          </button>
+        )}
       </div>
 
       <div className="player__right">
+        {spoken && (
+          <button
+            className={`icon-button player__speed${speed !== 1 ? " icon-button--active" : ""}`}
+            type="button"
+            aria-label={`Playback speed: ${speed}×`}
+            title="Playback speed (podcasts and audiobooks)"
+            disabled={!preferences}
+            onClick={nextSpeed}
+          >
+            {speed}×
+          </button>
+        )}
         <button
           className={`icon-button player__now-playing${nowPlaying.open ? " icon-button--active" : ""}`}
           type="button"
@@ -171,17 +255,19 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
         >
           <QueueIcon />
         </button>
-        <button
-          className={`icon-button player__crossfade${state.crossfade ? " icon-button--active" : ""}`}
-          type="button"
-          aria-label="Crossfade"
-          aria-pressed={state.crossfade}
-          title={state.crossfade ? `Crossfade: ${state.crossfadeSeconds} s (change in Settings)` : "Crossfade: off"}
-          onClick={() => engine.toggleCrossfade()}
-        >
-          <CrossfadeIcon />
-          {state.crossfade && <span className="player__crossfade-seconds">{state.crossfadeSeconds}s</span>}
-        </button>
+        {!state.spoken && (
+          <button
+            className={`icon-button player__crossfade${state.crossfade ? " icon-button--active" : ""}`}
+            type="button"
+            aria-label="Crossfade"
+            aria-pressed={state.crossfade}
+            title={state.crossfade ? `Crossfade: ${state.crossfadeSeconds} s (change in Settings)` : "Crossfade: off"}
+            onClick={() => engine.toggleCrossfade()}
+          >
+            <CrossfadeIcon />
+            {state.crossfade && <span className="player__crossfade-seconds">{state.crossfadeSeconds}s</span>}
+          </button>
+        )}
         <span className="player__time">
           {formatTime(state.position)} / {formatTime(state.duration)}
         </span>
@@ -240,13 +326,18 @@ function PlayerMenu({ miniVisualizer, onToggleVisualizer }: { miniVisualizer: bo
               {formatTime(state.position)} / {formatTime(state.duration)}
             </p>
           )}
-          {item(state.shuffle ? "Shuffle: on" : "Shuffle: off", state.shuffle, () => engine.toggleShuffle(), <ShuffleIcon />)}
-          {item(REPEAT_LABELS[state.repeat], state.repeat !== "off", () => engine.cycleRepeat(), <RepeatIcon one={state.repeat === "one"} />)}
-          {item(
-            state.crossfade ? `Crossfade: ${state.crossfadeSeconds} s` : "Crossfade: off",
-            state.crossfade,
-            () => engine.toggleCrossfade(),
-            <CrossfadeIcon />,
+          {/* Not for audiobooks and podcasts. */}
+          {!state.spoken && (
+            <>
+              {item(state.shuffle ? "Shuffle: on" : "Shuffle: off", state.shuffle, () => engine.toggleShuffle(), <ShuffleIcon />)}
+              {item(REPEAT_LABELS[state.repeat], state.repeat !== "off", () => engine.cycleRepeat(), <RepeatIcon one={state.repeat === "one"} />)}
+              {item(
+                state.crossfade ? `Crossfade: ${state.crossfadeSeconds} s` : "Crossfade: off",
+                state.crossfade,
+                () => engine.toggleCrossfade(),
+                <CrossfadeIcon />,
+              )}
+            </>
           )}
           {item(miniVisualizer ? "Visualizer: on" : "Visualizer: off", miniVisualizer, onToggleVisualizer, <VisualizerIcon />)}
           <label className="player-menu__volume">

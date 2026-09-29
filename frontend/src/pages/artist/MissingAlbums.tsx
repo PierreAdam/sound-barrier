@@ -269,7 +269,7 @@ export function ReleaseGroupCard({
       <div className="album-card release-card release-card--owned">
         <Link className="album-card__link" to={`/albums/${group.owned.albumId}`} title={`${group.owned.name} (in your library)`}>
           <span className="release-card__cover">
-            <CoverArt id={group.owned.coverArt ?? undefined} size={180} className="album-card__cover" alt="" />
+            <CoverArt id={group.owned.coverArt ?? undefined} size={320} className="album-card__cover" alt="" />
             <span className="release-card__owned">✓ In library</span>
           </span>
           <span className="album-card__name">{group.title}</span>

@@ -18,13 +18,15 @@ from app.models import (
     AppUser,
     Artist,
     ArtistAnnotation,
+    Bookmark,
     Genre,
+    MusicFolder,
     Song,
     SongAnnotation,
     SongArtist,
     SongGenre,
 )
-from app.services import music_folders
+from app.services import music_folders, server_settings
 
 
 class FolderNotAccessibleError(Exception):
@@ -82,15 +84,48 @@ class SongEntry:
     last_played_at: datetime | None
     genres: list[str] = field(default_factory=list[str])
     roles: list[RoleRef] = field(default_factory=list[RoleRef])
+    bookmark_ms: int | None = None  # where the user stopped (audiobooks, podcasts)
+    folder_kind: str = "music"  # of its library folder: music, podcasts, audiobooks
 
     def artists(self, role: str) -> list[NamedRef]:
         return [r.artist for r in self.roles if r.role == role]
 
 
+def music_album_ids() -> Select[uuid.UUID]:
+    """Albums with songs in music folders (not podcasts or audiobooks), for queries that
+    do not go through the user's folders."""
+    return (
+        select(Song.album_id)
+        .join(MusicFolder, MusicFolder.id == Song.music_folder_id)
+        .where(MusicFolder.kind == music_folders.MUSIC)
+    )
+
+
+async def enabled_kinds(session: AsyncSession) -> list[str]:
+    """Music, and the spoken kinds an admin turned on."""
+    spoken = await server_settings.get_spoken_audio(session)
+    return [music_folders.MUSIC, *(k for k in music_folders.SPOKEN_KINDS if spoken.enabled(k))]
+
+
+async def playable_folder_ids(session: AsyncSession, user: AppUser) -> list[int]:
+    """Every folder whose songs the user may play: music, and podcasts / audiobooks when
+    on (stream, getSong, bookmarks). Lists and searches use visible_folder_ids."""
+    kinds = await enabled_kinds(session)
+    return [f.id for f in await music_folders.list_for_user(session, user, kinds)]
+
+
+async def spoken_folder_ids(session: AsyncSession, user: AppUser, kind: str) -> list[int]:
+    """The user's folders of a spoken kind, if it is on."""
+    if kind not in await enabled_kinds(session):
+        return []
+    return [f.id for f in await music_folders.list_for_user(session, user, (kind,))]
+
+
 async def visible_folder_ids(
     session: AsyncSession, user: AppUser, music_folder_id: int | None = None
 ) -> list[int]:
-    """The user's folders, or only `music_folder_id` if given (and accessible)."""
+    """The user's music folders (never podcasts or audiobooks), or only
+    `music_folder_id` if given (and accessible)."""
     allowed = [f.id for f in await music_folders.list_for_user(session, user)]
     if music_folder_id is None:
         return allowed
@@ -355,7 +390,8 @@ async def album_list(
 
 
 async def get_song(session: AsyncSession, user: AppUser, song_id: uuid.UUID) -> SongEntry | None:
-    folder_ids = await visible_folder_ids(session, user)
+    """A song the user may play (music, or a podcast / audiobook when that kind is on)."""
+    folder_ids = await playable_folder_ids(session, user)
     songs = await _song_entries(session, user, folder_ids, Song.id == song_id)
     return songs[0] if songs else None
 
@@ -403,12 +439,26 @@ async def artist_songs(
 async def get_songs(
     session: AsyncSession, user: AppUser, song_ids: Sequence[uuid.UUID]
 ) -> dict[uuid.UUID, SongEntry]:
-    """The songs among `song_ids` the user can see (present, in their folders)."""
+    """The songs among `song_ids` the user can play (present, in their folders; queues,
+    playlists and bookmarks may hold podcast episodes and audiobook chapters)."""
     if not song_ids:
         return {}
-    folder_ids = await visible_folder_ids(session, user)
+    folder_ids = await playable_folder_ids(session, user)
     entries = await _song_entries(session, user, folder_ids, Song.id.in_(set(song_ids)))
     return {entry.song.id: entry for entry in entries}
+
+
+async def folder_songs(
+    session: AsyncSession,
+    user: AppUser,
+    folder_ids: list[int],
+    *where: ColumnElement[bool],
+    order_by: Sequence[Any] = (),
+) -> list[SongEntry]:
+    """The present songs of these folders (e.g. a podcasts folder, spoken_folder_ids)."""
+    if not folder_ids:
+        return []
+    return await _song_entries(session, user, folder_ids, *where, order_by=order_by)
 
 
 async def _song_entries(
@@ -429,12 +479,16 @@ async def _song_entries(
                 SongAnnotation.rating,
                 SongAnnotation.play_count,
                 SongAnnotation.last_played_at,
+                Bookmark.position_ms,
+                MusicFolder.kind,
             )
             .join(Album, Album.id == Song.album_id)
+            .join(MusicFolder, MusicFolder.id == Song.music_folder_id)
             .outerjoin(
                 SongAnnotation,
                 (SongAnnotation.item_id == Song.id) & (SongAnnotation.user_id == user.id),
             )
+            .outerjoin(Bookmark, (Bookmark.song_id == Song.id) & (Bookmark.user_id == user.id))
             .where(_visible_song(folder_ids), *where)
             .order_by(*order_by)
             .limit(limit)
@@ -467,8 +521,10 @@ async def _song_entries(
             played,
             genres.get(song.id, []),
             roles.get(song.id, []),
+            bookmark,
+            kind,
         )
-        for song, album, starred, rating, play_count, played in rows
+        for song, album, starred, rating, play_count, played, bookmark, kind in rows
     ]
 
 

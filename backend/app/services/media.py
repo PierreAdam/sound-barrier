@@ -30,7 +30,7 @@ async def song_file(session: AsyncSession, user: AppUser, song_id: str) -> Audio
     parsed = browsing.parse_id(song_id)
     if parsed is None:
         return None
-    folder_ids = await browsing.visible_folder_ids(session, user)
+    folder_ids = await browsing.playable_folder_ids(session, user)
     row = (
         await session.execute(
             select(Song, MusicFolder.path)

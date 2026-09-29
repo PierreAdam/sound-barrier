@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 
 from app.api.deps import AdminCaller, ApiModel, CurrentCaller, DbSession, scan_manager
 from app.models import MusicFolder, Scan
-from app.services import music_folders, scans, server_settings
+from app.services import browsing, music_folders, scans, server_settings
 
 router = APIRouter(tags=["library"])
 
@@ -76,6 +76,85 @@ async def set_library(
     if changed:
         scan_manager(request).start()
     return LibraryResponse(folder=await _folder_out(folder))
+
+
+# --- podcasts and audiobooks: their folders and switches ---------------------------------
+
+
+class SpokenFolder(ApiModel):
+    enabled: bool  # turned on by an admin (menu entry, import choice, Subsonic channels)
+    folder: LibraryFolder | None
+
+
+class SpokenFolders(ApiModel):
+    podcasts: SpokenFolder
+    audiobooks: SpokenFolder
+
+
+class SpokenFolderUpdate(ApiModel):
+    enabled: bool
+    # None keeps the folder; "" removes it (its songs leave the library, files stay).
+    path: str | None = None
+
+
+async def _spoken_out(session: DbSession) -> SpokenFolders:
+    switches = await server_settings.get_spoken_audio(session)
+    found: dict[str, SpokenFolder] = {}
+    for kind in music_folders.SPOKEN_KINDS:
+        folder = await music_folders.get_folder(session, kind)
+        found[kind] = SpokenFolder(
+            enabled=switches.enabled(kind), folder=await _folder_out(folder) if folder else None
+        )
+    return SpokenFolders(podcasts=found["podcasts"], audiobooks=found["audiobooks"])
+
+
+@router.get("/library/spoken")
+async def get_spoken_folders(_: AdminCaller, session: DbSession) -> SpokenFolders:
+    return await _spoken_out(session)
+
+
+@router.put("/library/spoken/{kind}")
+async def set_spoken_folder(
+    kind: str, body: SpokenFolderUpdate, request: Request, _: AdminCaller, session: DbSession
+) -> SpokenFolders:
+    """The podcasts or audiobooks folder and switch. A quick scan starts when the path
+    changes."""
+    if kind not in music_folders.SPOKEN_KINDS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown kind")
+    changed = False
+    if body.path is not None and body.path.strip():
+        try:
+            __, changed = await music_folders.set_folder(session, kind, body.path)
+        except music_folders.InvalidMusicFolderError as error:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from None
+    elif body.path is not None:
+        folder = await music_folders.get_folder(session, kind)
+        if folder is not None:
+            await music_folders.remove(session, folder.id)
+    switches = await server_settings.get_spoken_audio(session)
+    setattr(switches, kind, body.enabled)
+    await server_settings.set_spoken_audio(session, switches)
+    await session.commit()
+    if changed:
+        # A scan may be running (e.g. both folders set one after the other): then right after.
+        scan_manager(request).request()
+    return await _spoken_out(session)
+
+
+class Sections(ApiModel):
+    """The library sections a user has: Podcasts / Audiobooks when on and set up."""
+
+    podcasts: bool
+    audiobooks: bool
+
+
+@router.get("/library/sections")
+async def get_sections(caller: CurrentCaller, session: DbSession) -> Sections:
+    available = {
+        kind: bool(await browsing.spoken_folder_ids(session, caller.user, kind))
+        for kind in music_folders.SPOKEN_KINDS
+    }
+    return Sections(podcasts=available["podcasts"], audiobooks=available["audiobooks"])
 
 
 # --- scans --------------------------------------------------------------------

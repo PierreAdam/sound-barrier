@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # the library folder and the import root folder. Both can be changed in Settings.
     initial_library_dir: Path | None = None
     initial_import_dir: Path | None = None
+    # Podcasts and audiobooks folders (optional; their sections stay off until an admin
+    # turns them on in Settings).
+    initial_podcasts_dir: Path | None = None
+    initial_audiobooks_dir: Path | None = None
     # Failed sign-ins (web and Subsonic API) from one IP address before it is refused for
     # login_block_minutes (the failures are counted over the same duration).
     login_max_failures: int = 10

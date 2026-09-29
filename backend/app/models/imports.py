@@ -48,6 +48,12 @@ class ImportTask(Base):
     recommendation: Mapped[str | None]  # strong, medium, low, none
     decision: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)  # imported paths
+    # Audiobooks / podcasts (spoken_review.py): {kind, folders, images, proposal, lookup}.
+    spoken: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Audiobooks / podcasts (spoken_review.py): {kind, folders, images, proposal, lookup}.
+    spoken: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Audiobooks / podcasts (spoken_review.py): {kind, folders, images, proposal, lookup}.
+    spoken: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     error: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())

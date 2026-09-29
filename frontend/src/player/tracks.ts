@@ -16,5 +16,19 @@ export function songToTrack(song: Child): Track {
     suffix: song.suffix,
     size: song.size,
     bitRate: song.bitRate,
+    longForm: song.mediaType === "audiobook" || song.mediaType === "podcast",
+    spokenKind: song.mediaType === "audiobook" ? "audiobooks" : song.mediaType === "podcast" ? "podcasts" : undefined,
+    chapters: song.chapters?.map((c) => ({ start: c.startMs / 1000, title: c.title })),
   };
+}
+
+/** The page of a track's album: the album, or the podcast / audiobook. */
+export function albumUrl(track: Track): string | undefined {
+  if (!track.albumId) return undefined;
+  return track.spokenKind ? `/${track.spokenKind}/${track.albumId}` : `/albums/${track.albumId}`;
+}
+
+/** The page of a track's artist (music only: authors have none). */
+export function artistUrl(track: Track): string | undefined {
+  return track.artistId && !track.longForm ? `/artists/${track.artistId}` : undefined;
 }
