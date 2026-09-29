@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from httpx import AsyncClient
 
 from app.scanner.tags import read_audio_file
+from app.services import server_settings
 from tests.audio import COVER_JPG, make_track
 from tests.integration.conftest import SubsonicUser, signed_in
 from tests.integration.test_manage import wait_scans
@@ -397,3 +398,80 @@ async def test_merge_lookup_and_podcast_episodes(
         [the_show] = [s for s in page["shows"] if s["title"] == "The Show"]
         assert the_show["episodes"] == 3
         await web.put("/api/manage/settings", json={"root": None})
+
+
+async def test_import_loose_files(
+    app: FastAPI,
+    admin: SubsonicUser,
+    spoken: dict[str, Path],  # noqa: F811
+    catalogs: FakeCatalogs,
+    tmp_path: Path,
+) -> None:
+    """Books that are one file each, lying in the import folder itself: each selected file
+    is a book, and moving them never tidies away the import folder or its other files."""
+    inbox = tmp_path / "loose-inbox"
+    first = make_track(inbox / "First Book", album="First Book", artist="An Author")
+    second = make_track(inbox / "Second Book", album="Second Book", artist="An Author")
+    (inbox / "First Book.jpg").write_bytes(COVER_JPG.read_bytes())  # its cover
+    (inbox / "wallpaper.jpg").write_bytes(COVER_JPG.read_bytes())  # someone else's
+    (inbox / "notes.txt").write_text("keep me")
+    make_track(inbox / "A Folder Book" / "01", album="A Folder Book", artist="An Author")
+
+    async with app.state.db.session() as session:  # "move" (no web setting for it)
+        settings = await server_settings.get_import_settings(session)
+        await server_settings.set_import_settings(
+            session, settings.model_copy(update={"mode": "move"})
+        )
+        await session.commit()
+    try:
+        await _loose_files(app, admin, spoken, inbox, first, second)
+    finally:
+        async with app.state.db.session() as session:
+            await server_settings.set_import_settings(session, settings)
+            await session.commit()
+
+
+async def _loose_files(
+    app: FastAPI,
+    admin: SubsonicUser,
+    folders: dict[str, Path],
+    inbox: Path,
+    first: Path,
+    second: Path,
+) -> None:
+    async with signed_in(app, admin) as web:
+        await web.put("/api/manage/settings", json={"root": str(inbox)})
+        music = await web.post("/api/manage/imports", json={"paths": [str(first)], "kind": "music"})
+        assert music.status_code == 400  # music: album folders only
+        tasks = await _import(app, web, "audiobook", first, second)
+        assert sorted(Path(t["sourceDir"]).name for t in tasks) == [
+            "First Book.mp3",
+            "Second Book.mp3",
+        ]
+        one = next(t for t in tasks if t["sourceDir"] == str(first))
+        proposal = one["spoken"]["proposal"]
+        assert proposal["title"] == "First Book"  # not "First Book.mp3"
+        assert one["spoken"]["images"] == [str(inbox / "First Book.jpg")]  # not the wallpaper
+        response = await web.post(
+            f"/api/manage/tasks/{one['id']}/spoken/import", json=_body(proposal)
+        )
+        assert response.status_code == 200, response.text
+        await app.state.imports.wait_idle()
+
+        # The file moved; the import folder and all the rest stay.
+        assert not first.exists()
+        assert (folders["audiobooks"] / "An Author" / "First Book").is_dir()
+        assert {p.name for p in inbox.iterdir()} == {
+            "Second Book.mp3",
+            "First Book.jpg",
+            "wallpaper.jpg",
+            "notes.txt",
+            "A Folder Book",
+        }
+
+        # The import folder itself: its folders and its loose audio files, each a book.
+        tasks = await _import(app, web, "audiobook", inbox)
+        assert sorted(Path(t["sourceDir"]).name for t in tasks) == [
+            "A Folder Book",
+            "Second Book.mp3",
+        ]

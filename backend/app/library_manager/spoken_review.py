@@ -132,7 +132,10 @@ class SpokenMetadata:
 
 def find_units(source: Path) -> list[list[Path]]:
     """The books / shows in `source`: for each, its folders (the main one first). A
-    folder named like "CD1" / "Part 2" belongs to its parent's book."""
+    folder named like "CD1" / "Part 2" belongs to its parent's book. A selected file is a
+    book / show of its own (several are merged in the review when they are one)."""
+    if source.is_file():
+        return [[source]] if files.is_audio(source) else []
     units: dict[Path, list[Path]] = {}
     for folder in files.find_album_folders(source):
         owner = folder
@@ -147,10 +150,14 @@ def find_units(source: Path) -> list[list[Path]]:
 
 
 def read_files(folders: list[Path]) -> list[SpokenFile]:
-    """The audio files of a book / show (its folders in order), with their tags."""
+    """The audio files of a book / show (its folders in order, or selected files), with
+    their tags."""
     found: list[SpokenFile] = []
     for folder in folders:
-        audio_files = [p for p in folder.iterdir() if p.is_file() and files.is_audio(p)]
+        if folder.is_file():
+            audio_files = [folder] if files.is_audio(folder) else []
+        else:
+            audio_files = [p for p in folder.iterdir() if p.is_file() and files.is_audio(p)]
         for path in sorted(audio_files, key=lambda p: natural_key(p.name)):
             audio = read_audio_file(path)
             if audio is None:
@@ -181,13 +188,25 @@ def read_files(folders: list[Path]) -> list[SpokenFile]:
 
 
 def folder_images(folders: list[Path]) -> list[Path]:
-    """Pictures next to the files, covers first ("cover", "folder", "front")."""
-    images = [
-        p
-        for folder in folders
-        for p in folder.iterdir()
-        if p.is_file() and suffix_of(p.name) in IMAGE_CONTENT_TYPES
-    ]
+    """Pictures next to the files, covers first ("cover", "folder", "front"). For a
+    selected file, only a picture of the same name ("book.jpg" for "book.m4b"): the
+    others around it belong to other books."""
+    images: list[Path] = []
+    for folder in folders:
+        if folder.is_file():
+            images += [
+                p
+                for p in folder.parent.iterdir()
+                if p.is_file()
+                and p.stem.casefold() == folder.stem.casefold()
+                and suffix_of(p.name) in IMAGE_CONTENT_TYPES
+            ]
+        else:
+            images += [
+                p
+                for p in folder.iterdir()
+                if p.is_file() and suffix_of(p.name) in IMAGE_CONTENT_TYPES
+            ]
 
     def rank(path: Path) -> tuple[int, str]:
         name = path.stem.casefold()
@@ -256,8 +275,9 @@ def order(kind: str, items: list[SpokenFile]) -> list[SpokenFile]:
 def propose(kind: str, folders: list[Path], items: list[SpokenFile]) -> SpokenMetadata:
     """What the review starts from."""
     main = folders[0]
+    name = main.stem if files.is_audio(main) else main.name  # a selected file: no extension
     album = _most_common([i.album for i in items])
-    title = clean_title(album or main.name) or clean_title(main.name) or main.name
+    title = clean_title(album or name) or clean_title(name) or name
     compilation = any(i.compilation for i in items)
     album_artist = _most_common([i.album_artist for i in items])
     artist = _most_common([i.artist for i in items])
@@ -383,10 +403,12 @@ def place(
     *,
     move: bool,
     cover: tuple[bytes, str] | None,
+    remove_emptied: bool = True,
 ) -> Placed:
     """Copies / moves the files into their folder under their new names, writes their
     tags and the cover. On a failure, what was copied goes again (moved files are put
-    back)."""
+    back). `remove_emptied`: after a move, the source folders left without audio go
+    (never for selected files: their folder, maybe the import folder itself, stays)."""
     folder, steps = plan(kind, metadata, root)
     placed = Placed(folder)
     done: list[tuple[Path, Path]] = []
@@ -419,7 +441,7 @@ def place(
         if not any(folder.iterdir()):
             folder.rmdir()
         raise
-    if move:
+    if move and remove_emptied:
         for source_dir in sorted(
             {Path(e.path).parent for e in metadata.entries}, key=lambda p: -len(p.parts)
         ):

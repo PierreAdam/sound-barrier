@@ -139,6 +139,8 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
     };
   }, [listed]);
   const kindOf = (path: string) => kinds.get(pathKey(path));
+  /** A file of the current folder (not a folder): audiobooks / podcasts only. */
+  const fileAt = (path: string) => listing?.entries.some((e) => !e.isDir && e.path === path) ?? false;
   // The kinds offered: music, and the sections that are on.
   const offered: ImportAs[] = ["music", ...(sections.audiobooks ? (["audiobook"] as const) : []), ...(sections.podcasts ? (["podcast"] as const) : [])];
 
@@ -151,8 +153,10 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
     });
   }
 
-  /** The kind the folders look like: the one the buttons put forward. */
+  /** The kind the folders look like: the one the buttons put forward. Single files are
+   * audiobooks / podcasts (music is imported by album folder). */
   function suggested(paths: string[]): ImportAs {
+    if (paths.some((p) => fileAt(p))) return offered.includes("audiobook") ? "audiobook" : offered[1] ?? "music";
     const hinted = paths.map((p) => kindOf(p)?.kind);
     const spoken = hinted.find((k) => k !== undefined);
     return spoken && offered.includes(spoken) && hinted.every((k) => k === spoken) ? spoken : "music";
@@ -177,7 +181,14 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
     try {
       const job = await api.startImport(paths, importAs);
       const as = importAs === "music" ? "" : ` as ${importAs === "podcast" ? "podcasts" : "audiobooks"}`;
-      setMessage(`Import #${job.id} started${as}: ${plural(paths.length, "folder")}.`);
+      const loose = paths.filter((p) => fileAt(p)).length;
+      const what = [
+        paths.length - loose ? plural(paths.length - loose, "folder") : "",
+        loose ? plural(loose, "file") : "",
+      ]
+        .filter(Boolean)
+        .join(" and ");
+      setMessage(`Import #${job.id} started${as}: ${what}.`);
       setSelected(new Set());
       await imports.refresh();
     } catch (e) {
@@ -187,6 +198,9 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
 
   const folders = sorted(listing?.entries.filter((e) => e.isDir) ?? [], order);
   const fileEntries = sorted(listing?.entries.filter((e) => !e.isDir) ?? [], order);
+  // Audio files can be selected one by one for audiobooks / podcasts (a book in one file).
+  const filesSelectable = offered.length > 1;
+  const selectedFiles = fileEntries.filter((e) => selected.has(e.path)).length;
   const audioHere = listing?.entries.filter((e) => !e.isDir && e.audioFiles).length ?? 0;
   const where = listing ? relative(listing.path, listing.root) : "";
 
@@ -270,6 +284,17 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
           ))}
           {fileEntries.map((entry) => (
             <li key={entry.path} className="browser__entry browser__entry--file">
+              {filesSelectable && entry.audioFiles > 0 ? (
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${entry.name}`}
+                  title="A book / show in one file (audiobooks, podcasts)"
+                  checked={selected.has(entry.path)}
+                  onChange={() => toggle(entry.path)}
+                />
+              ) : (
+                <span className="browser__no-check" aria-hidden="true" />
+              )}
               <MusicNoteIcon />
               <span>{entry.name}</span>
               <span className="text-muted">{formatSize(entry.size)}</span>
@@ -287,6 +312,9 @@ function BrowserSection({ settings, imports }: { settings: ManageSettings; impor
             offered={offered}
             suggested={suggested([...selected])}
             disabled={selected.size === 0}
+            musicUnavailable={
+              selectedFiles > 0 ? "Music is imported by album folder: select folders (files: audiobooks, podcasts)" : undefined
+            }
             onImport={(kind) => void startImport([...selected], kind)}
           />
           {listing.parent && (
@@ -322,12 +350,14 @@ function ImportButtons({
   offered,
   suggested,
   disabled = false,
+  musicUnavailable,
   onImport,
 }: {
   label: string;
   offered: ImportAs[];
   suggested: ImportAs;
   disabled?: boolean;
+  musicUnavailable?: string; // why Music cannot take this selection (files)
   onImport(kind: ImportAs): void;
 }) {
   if (offered.length === 1) {
@@ -347,11 +377,11 @@ function ImportButtons({
           key={kind}
           className={`button${kind === suggested ? " button--primary" : ""}`}
           type="button"
-          disabled={disabled}
+          disabled={disabled || (kind === "music" && musicUnavailable !== undefined)}
           title={
             kind === "music"
-              ? "Matched with MusicBrainz (beets), into the music library"
-              : "Through the review (metadata, online lookup), one folder each"
+              ? (musicUnavailable ?? "Matched with MusicBrainz (beets), into the music library")
+              : "Through the review (metadata, online lookup), one folder or file each"
           }
           onClick={() => onImport(kind)}
         >

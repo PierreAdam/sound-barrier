@@ -489,6 +489,8 @@ class ImportManager:
                 return
             kind = task.spoken["kind"]
             metadata = spoken_review.SpokenMetadata.from_json(task.decision["metadata"])
+            # Selected files (not folders): nothing around them is removed after a move.
+            whole_folders = not any(files.is_audio(Path(f)) for f in task.spoken["folders"])
             folder = await music_folders.get_folder(session, SPOKEN_FOLDERS[kind])
             task.status = APPLYING
             await session.commit()
@@ -507,6 +509,7 @@ class ImportManager:
                 root,
                 move=settings.mode == "move",
                 cover=cover,
+                remove_emptied=whole_folders,
             )
         except TaggerError as exc:
             await self._fail(task_id, exc, keep_pending=True)  # fixable in the review

@@ -262,17 +262,42 @@ def _job_out(job: ImportJob, tasks: list[ImportTask]) -> JobOut:
     )
 
 
+def _expand_root(sources: list[Path], root: Path) -> list[Path]:
+    expanded: list[Path] = []
+    for source in sources:
+        if files.real(source) != files.real(root):
+            expanded.append(source)
+            continue
+        for child in sorted(source.iterdir(), key=lambda p: p.name.casefold()):
+            if child.name.startswith("."):
+                continue
+            if child.is_dir() or (child.is_file() and files.is_audio(child)):
+                expanded.append(child)
+    return list(dict.fromkeys(expanded))
+
+
 @router.post("/imports", status_code=status.HTTP_202_ACCEPTED)
 async def start_import(
     body: ImportRequest, request: Request, caller: AdminCaller, session: DbSession
 ) -> JobOut:
     root = await _import_root(session)
     if not body.paths:
-        raise _bad_request("Select at least one folder")
+        raise _bad_request("Select at least one folder or file")
     try:
         sources = [await asyncio.to_thread(files.ensure_within, p, [root]) for p in body.paths]
     except files.OutsideAllowedFolderError:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Outside the import root folder") from None
+    if body.kind != "music":
+        # The import folder itself: its sub-folders, and its loose audio files as selected
+        # files (never a "book" of its own: its folder would be tidied away after a move).
+        sources = await asyncio.to_thread(_expand_root, sources, root)
+    loose = [s for s in sources if not s.is_dir()]
+    if loose and body.kind == "music":
+        raise _bad_request(
+            "Music is imported by album folder: select folders (files: audiobooks, podcasts)"
+        )
+    if any(not files.is_audio(s) for s in loose):
+        raise _bad_request("Only audio files can be imported")
     job_kind = imports.IMPORT
     if body.kind != "music":
         folder_kind = imports.SPOKEN_FOLDERS[body.kind]
