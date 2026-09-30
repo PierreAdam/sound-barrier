@@ -8,6 +8,7 @@ import { setWebPlayerId, useWebPlayerId } from "../player/webPlayer";
 import { type LinkTarget, useRemoteLink } from "../remote/link";
 import { controlTarget, playHere, usePlayerMode } from "../remote/mode";
 import { ServerPlayerSection } from "../remote/ServerPlayerSection";
+import { ScreenActions } from "../cast/tv/ScreenActions";
 import { disableRemoteTarget, enableRemoteTarget, getRemoteTarget, useRemoteTarget } from "../remote/target";
 import { Dropdown } from "./Dropdown";
 import { CheckIcon, ChevronDownIcon, DevicesIcon, RemoteIcon } from "./Icons";
@@ -181,6 +182,7 @@ function PlaybackChoices({
       {controllable.kind === "replaced" && (
         <p className="dropdown__header remote-menu__note">Another tab took over: {controllable.device}</p>
       )}
+      <ScreenActions close={close} />
 
       <MenuSection title="Other devices" info="About controlling another device">
         <strong>Control another device</strong>: the player bar and the queue then show what it plays, and what

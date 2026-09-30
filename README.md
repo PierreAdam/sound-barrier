@@ -54,6 +54,9 @@ review, helped by Audible, MusicBrainz, Open Library and iTunes.
   that player (in a dull accent color, "Playing on …"), and what you play or queue while
   browsing goes there. Needs WebSockets through your reverse proxy
   ([below](#behind-a-reverse-proxy-https)).
+- **Cast this player** (desktop Chrome, Edge): your own queue to a Chromecast, with Now
+  playing and synced lyrics, rendered by Chrome on your computer (no server player, no
+  third party); or in a window, for a TV plugged in. "Play here" brings the queue back.
 - **Server player**: a player on the server itself, whose sound is a stream: cast it to a
   Chromecast (Chrome, Edge, Chrome on Android), AirPlay it, or open it in VLC or any
   internet radio app. On a TV, a Now playing screen (cover, progress, synced lyrics):

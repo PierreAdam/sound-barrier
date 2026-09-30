@@ -352,11 +352,12 @@ function PlayerWhere() {
   const notice = useModeNotice();
   if (remote) {
     return (
-      <span className="player__where" role="status">
+      <span className="player__where" role="status" title={notice ?? undefined}>
         Playing on <strong>{remote.name}</strong> ·{" "}
         <button className="link-button" type="button" onClick={() => playHere()}>
           Play here
         </button>
+        {notice && <span className="player__where-notice"> · {notice}</span>}
       </span>
     );
   }

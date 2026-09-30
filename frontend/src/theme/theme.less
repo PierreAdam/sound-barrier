@@ -141,6 +141,7 @@
 // with 3 or more per row they stay between 200 and ~270 px (CSS pixels: the same size
 // whatever the screen's display scaling).
 @album-card-width: 200px;
+@album-card-width-narrow: 150px; // phones: two cards side by side at least
 @breakpoint-narrow: 760px;
 
 @scrollbar-size: 10px;
@@ -1241,6 +1242,12 @@ a {
   margin: 0;
   padding: 0;
   list-style: none;
+
+  // Phones: smaller cards, two side by side at least (one filled the whole screen).
+  @media (max-width: @breakpoint-narrow) {
+    grid-template-columns: repeat(auto-fill, minmax(@album-card-width-narrow, 1fr));
+    gap: @space-3;
+  }
 }
 
 .album-card {
@@ -3938,6 +3945,10 @@ select.field__input {
     }
   }
 
+  &__where-notice {
+    color: @color-warning;
+  }
+
   // Remote mode: the bar drives another player; a dull accent tells it at a glance.
   &--remote {
     border-top-color: color-mix(in srgb, @color-accent 45%, @color-border);
@@ -5510,4 +5521,12 @@ select.field__input {
   .remote-menu__note {
     overflow-wrap: anywhere;
   }
+}
+
+// The Player menu's "Cast this player… / TV window" (or "Back here"): wraps rather than
+// going out of the menu, next to its ⓘ.
+.screen-actions {
+  flex: 1;
+  flex-wrap: wrap;
+  min-width: 0;
 }

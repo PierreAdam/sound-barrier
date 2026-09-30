@@ -14,6 +14,7 @@ import { coverVersion } from "../api/coverVersions";
 import type { SubsonicClient } from "../api/subsonic";
 import { useSession } from "../auth/AuthContext";
 import { usePreferences } from "../preferences/PreferencesContext";
+import { SCREEN_TARGET, screenLink } from "../cast/tv/screenLink";
 import { remoteLink } from "../remote/link";
 import { type PlayerMode, playHere, usePlayerMode } from "../remote/mode";
 import { RemoteController } from "../remote/RemoteController";
@@ -139,26 +140,41 @@ export function useLocalPlayer(): PlayerEngine {
  * Remote mode: the remote player follows the target chosen in the Remote menu, and this
  * tab's own player is paused (left as it was, for when it plays here again). The target
  * gone (tab closed, server restarted): back to this tab, with a notice.
+ *
+ * This tab's own TV page ("screen": cast/tv) is driven through its own link, and its queue
+ * came from here: leaving it, the queue comes back here, where it was (playing if it was).
  */
 function useRemoteMode(engine: PlayerEngine, mode: PlayerMode): RemoteController {
   const remote = useMemo(() => new RemoteController(remoteLink), []);
+  const screen = useMemo(() => new RemoteController(screenLink), []);
+  const onScreen = mode.kind === "remote" && mode.targetKind === "screen";
   const target = mode.kind === "remote" ? mode.target : null;
   const name = mode.kind === "remote" ? mode.name : "";
   useEffect(() => {
-    remote.connect(target);
+    const controller = onScreen ? screen : remote;
+    const link = onScreen ? screenLink : remoteLink;
+    controller.connect(target);
     if (!target) return;
     engine.pause();
     const check = () => {
-      const { targets } = remoteLink.getView();
+      const { targets } = link.getView();
       if (targets && !targets.some((t) => t.id === target)) playHere(`${name} can no longer be controlled`);
     };
-    const unsubscribe = remoteLink.subscribe(check);
+    const unsubscribe = link.subscribe(check);
     return () => {
       unsubscribe();
-      remote.connect(null);
+      controller.connect(null);
+      if (onScreen && target === SCREEN_TARGET) {
+        const back = screenLink.takeBack();
+        screenLink.stop();
+        if (back && back.queue.tracks.length) {
+          engine.restoreQueue(back.queue);
+          if (back.playing) engine.togglePlay();
+        }
+      }
     };
-  }, [remote, engine, target, name]);
-  return remote;
+  }, [remote, screen, engine, onScreen, target, name]);
+  return onScreen ? screen : remote;
 }
 
 /**

@@ -628,6 +628,21 @@ without WebSocket, whose `send` applies commands), driven in remote mode.
 - Stream URLs use `SOUND_BARRIER_PUBLIC_URL` when set (the address devices reach the
   server at), else the request's.
 
+### This browser's player on a TV (`src/cast/tv/`, `tv.html`)
+
+Without the server player: the Player menu's "Cast this player…" (desktop Chrome / Edge,
+the Presentation API: Chrome renders the TV page out of sight and mirrors it to a
+Chromecast) or "TV window" (a window: a TV plugged in). The TV page is a second Vite
+entry: it plays with its own `PlayerEngine` (scrobbles, bookmarks, Now playing with
+synced lyrics, the look of `public/cast/screen.css`), through the Subsonic API with the
+credentials this tab hands it over their private channel (`channel.ts`: the presentation
+connection, or `postMessage` between same-origin windows). This tab drives it in remote
+mode, a target of kind "screen" reached through `ScreenLink` (the remote link's interface,
+without the server's relay): the same commands (`remote/apply.ts`) and reports
+(`remote/reporter.ts`, shared with a controllable tab). Casting hands it this tab's queue
+where it is; "Play here", or the TV page closing, brings it back (advanced since its last
+report), playing if it was. Nothing leaves this browser but the music from the server.
+
 User management uses the Subsonic endpoints (`getUsers`, `createUser`, `updateUser`,
 `deleteUser`, `changePassword`) since Subsonic covers it. Two roles: **admin** and
 **user**; Subsonic's role flags are derived from them (`services/users.apply_role`).

@@ -5,16 +5,11 @@ import { useSession } from "../auth/AuthContext";
 import { useLocalPlayer } from "../player/PlayerContext";
 import { useWebPlayerId } from "../player/webPlayer";
 import { usePreferences } from "../preferences/PreferencesContext";
-import { applyCommand, remoteStateOf } from "./apply";
+import { applyCommand } from "./apply";
 import { deviceName } from "./protocol";
+import { createReporter } from "./reporter";
 import { RemoteSocket } from "./socket";
 import { consumeTakeOver, getRemoteTarget, setRemoteTarget, useRemoteTarget } from "./target";
-
-// A state is sent when something changes, and this often while playing (keeps the
-// remotes' clocks right).
-const HEARTBEAT_MS = 10_000;
-// The position is sent again when it moved this far from where remotes expect it (a seek).
-const JUMP_SECONDS = 1.5;
 
 /**
  * While this tab is controllable (queue panel, Remote menu): its player is reported to the
@@ -35,35 +30,14 @@ export function RemoteTargetBridge() {
 
   useEffect(() => {
     if (!wanted) return;
-    let sent: { signature: string; position: number; at: number; playing: boolean; rate: number } | null = null;
-    // The queue: sent again when its entries change (not their metadata: a key is one track).
-    let queueSignature = "";
-    let queueRevision = 0;
-
-    const sendQueue = (force = false) => {
-      if (getRemoteTarget().kind !== "on" || !socket.connected) return;
-      const { keys, queue } = engine.getSnapshot();
-      const signature = keys.join(",");
-      if (!force && signature === queueSignature) return;
-      if (signature !== queueSignature) queueRevision += 1;
-      queueSignature = signature;
-      socket.send({ type: "queue", queue: { revision: queueRevision, keys, tracks: queue } });
-    };
-
-    const sendState = (force = false) => {
-      if (getRemoteTarget().kind !== "on" || !socket.connected) return;
-      sendQueue(); // first: the state names the queue it goes with
-      const state = remoteStateOf(engine.getSnapshot(), engine, queueRevision);
-      const signature = JSON.stringify({ ...state, position: 0, rate: 0 });
-      const now = Date.now();
-      const expected = sent
-        ? sent.position + (sent.playing ? ((now - sent.at) / 1000) * sent.rate : 0)
-        : state.position;
-      const jumped = Math.abs(state.position - expected) > JUMP_SECONDS;
-      if (!force && sent && signature === sent.signature && !jumped) return;
-      sent = { signature, position: state.position, at: now, playing: state.playing, rate: state.rate };
-      socket.send({ type: "state", state });
-    };
+    const reporter = createReporter(
+      engine,
+      {
+        queue: (queue) => socket.send({ type: "queue", queue }),
+        state: (state) => socket.send({ type: "state", state }),
+      },
+      () => getRemoteTarget().kind === "on" && socket.connected,
+    );
 
     const registerTarget = async () => {
       const id = live.current.playerId;
@@ -84,8 +58,7 @@ export function RemoteTargetBridge() {
         switch (message.type) {
           case "target-on":
             setRemoteTarget({ kind: "on", id: message.id });
-            sendQueue(true);
-            sendState(true);
+            reporter.report(true);
             break;
           case "conflict":
             setRemoteTarget({ kind: "conflict", device: message.device });
@@ -105,13 +78,9 @@ export function RemoteTargetBridge() {
     });
     register.current = () => void registerTarget();
     socket.start();
-    const unsubscribe = engine.subscribe(() => sendState());
-    const heartbeat = setInterval(() => {
-      if (engine.getSnapshot().playing) sendState(true);
-    }, HEARTBEAT_MS);
+    const stopFollowing = reporter.follow();
     return () => {
-      clearInterval(heartbeat);
-      unsubscribe();
+      stopFollowing();
       socket.send({ type: "stop" });
       socket.stop();
       register.current = () => undefined;

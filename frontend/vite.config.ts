@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
@@ -44,6 +45,15 @@ export default defineConfig({
       // Remote control's WebSocket (before "/api": the first match wins).
       "/api/remote/ws": { target: backend, ws: true },
       "/api": backend,
+    },
+  },
+  build: {
+    rollupOptions: {
+      // The web UI, and the TV page of "Cast this player" (src/cast/tv).
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        tv: fileURLToPath(new URL("./tv.html", import.meta.url)),
+      },
     },
   },
   test: {

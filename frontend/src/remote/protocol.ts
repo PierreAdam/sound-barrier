@@ -39,7 +39,8 @@ export type RemoteCommand =
   | { name: "remove"; keys: number[] }
   | { name: "move"; key: number; before: number | null }; // null: at the end
 
-export type TargetKind = "browser" | "server";
+// "screen": this tab's own TV page (cast/tv), driven without the server's relay.
+export type TargetKind = "browser" | "server" | "screen";
 
 export interface RemoteTargetInfo {
   id: string;

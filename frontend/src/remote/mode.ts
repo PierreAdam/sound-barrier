@@ -36,6 +36,12 @@ export function playHere(why: string | null = null): void {
   emit();
 }
 
+/** A notice about what plays, without leaving remote mode (e.g. the TV page waits). */
+export function setModeNotice(text: string | null): void {
+  notice = text;
+  emit();
+}
+
 export function getModeNotice(): string | null {
   return notice;
 }
