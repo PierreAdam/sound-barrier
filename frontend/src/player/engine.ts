@@ -163,13 +163,7 @@ export class PlayerEngine {
     const create = options.createAudio ?? (() => new Audio());
     this.decks = [create(), create()];
     this.prefs = this.loadPreferences();
-    this.decks.forEach((deck, deckIndex) => {
-      for (const type of DECK_EVENTS) {
-        const listener = () => this.onDeckEvent(deckIndex, type);
-        deck.addEventListener(type, listener);
-        this.detach.push(() => deck.removeEventListener(type, listener));
-      }
-    });
+    this.attach();
     this.applyVolumes();
     this.snapshot = this.buildSnapshot();
   }
@@ -193,11 +187,28 @@ export class PlayerEngine {
     return this.decks;
   }
 
+  /**
+   * Listens to the audio elements again after `destroy` (done by the constructor). React's
+   * StrictMode unmounts and mounts every component once in development: without this, the
+   * engine kept by the provider no longer heard its decks (time and lyrics stood still).
+   */
+  attach(): void {
+    if (this.detach.length) return;
+    this.decks.forEach((deck, deckIndex) => {
+      for (const type of DECK_EVENTS) {
+        const listener = () => this.onDeckEvent(deckIndex, type);
+        deck.addEventListener(type, listener);
+        this.detach.push(() => deck.removeEventListener(type, listener));
+      }
+    });
+  }
+
   destroy(): void {
     this.cancelFade();
     this.clearStopTimer();
     this.decks.forEach((deck) => deck.pause());
     this.detach.forEach((detach) => detach());
+    this.detach.length = 0;
     this.listeners.clear();
   }
 

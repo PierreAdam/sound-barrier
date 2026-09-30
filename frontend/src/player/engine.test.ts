@@ -438,3 +438,17 @@ describe("saved queue", () => {
     expect(engine.getSnapshot().current).toBeNull();
   });
 });
+
+describe("engine lifecycle", () => {
+  it("hears its decks again once attached after a destroy (StrictMode remount)", () => {
+    const { engine, decks } = setup();
+    engine.playQueue(tracks, 0);
+    engine.destroy();
+    engine.attach();
+    engine.attach(); // twice: still one listener per event
+    const seen: number[] = [];
+    engine.subscribe(() => seen.push(engine.getSnapshot().position));
+    (decks[0] as FakeAudio).advance(42);
+    expect(seen).toEqual([42]);
+  });
+});

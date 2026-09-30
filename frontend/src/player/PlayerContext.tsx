@@ -66,7 +66,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }),
     [],
   );
-  useEffect(() => () => engine.destroy(), [engine]);
+  useEffect(() => {
+    engine.attach(); // again after StrictMode's unmount (development)
+    return () => engine.destroy();
+  }, [engine]);
   useMediaSession(engine, client);
   useSyncedPlayerPreferences(engine);
   useWebQueue(engine);
