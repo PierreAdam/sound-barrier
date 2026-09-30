@@ -3992,6 +3992,9 @@ select.field__input {
   &__lyrics {
     overflow-y: auto;
     height: 100%;
+    // The lines window moves by blocks (Lyrics.tsx): it keeps the view in place itself,
+    // the same in every browser (Chrome's own scroll anchoring would shift it twice).
+    overflow-anchor: none;
     // Half the panel above and below the lyrics: every line, the first too, can be centered.
     padding: ~"calc(50vh - 110px)" @space-4 ~"calc(50vh - 110px)" 0;
     mask-image: linear-gradient(transparent, #000 15%, #000 85%, transparent);

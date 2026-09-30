@@ -93,6 +93,17 @@ export function usePlayer(): { state: PlayerSnapshot; engine: PlayerEngine } {
 }
 
 /**
+ * The engine only, without following its state: for components that read the position
+ * themselves (every animation frame) and must not re-render at every player tick, such
+ * as the lyrics of a long audiobook.
+ */
+export function usePlayerEngine(): PlayerEngine {
+  const engine = useContext(PlayerContext);
+  if (!engine) throw new Error("usePlayerEngine must be used inside <PlayerProvider>");
+  return engine;
+}
+
+/**
  * Crossfade settings follow the user (server preferences): applied to the engine once
  * loaded, and saved when changed from the player bar or the Account page. Volume,
  * shuffle and repeat stay per browser.
