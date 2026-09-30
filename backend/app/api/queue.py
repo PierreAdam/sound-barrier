@@ -1,4 +1,6 @@
-"""The web UI's play queue (one per user, shared by all their browsers).
+"""The web UI's play queues: the Shared one (every browser not assigned to a player), or
+a player's (`?player=`, see api/players.py). A player that is not the caller's (or no
+longer exists) is a 404: the browser goes back to Shared.
 
 Subsonic clients keep their own queue (getPlayQueue / savePlayQueue): the two never mix.
 """
@@ -38,9 +40,18 @@ class RevisionOut(ApiModel):
     revision: int
 
 
+def _not_found(error: web_queue.PlayerNotFoundError) -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, str(error))
+
+
 @router.get("")
-async def get_queue(caller: CurrentCaller, session: DbSession) -> QueueOut:
-    queue = await web_queue.get(session, caller.user)
+async def get_queue(
+    caller: CurrentCaller, session: DbSession, player: uuid.UUID | None = None
+) -> QueueOut:
+    try:
+        queue = await web_queue.get(session, caller.user, player)
+    except web_queue.PlayerNotFoundError as error:
+        raise _not_found(error) from None
     return QueueOut(
         revision=queue.revision,
         songs=[web_song(entry) for entry in queue.songs],
@@ -52,7 +63,9 @@ async def get_queue(caller: CurrentCaller, session: DbSession) -> QueueOut:
 
 
 @router.put("")
-async def save_queue(body: QueueIn, caller: CurrentCaller, session: DbSession) -> RevisionOut:
+async def save_queue(
+    body: QueueIn, caller: CurrentCaller, session: DbSession, player: uuid.UUID | None = None
+) -> RevisionOut:
     try:
         revision = await web_queue.save(
             session,
@@ -61,14 +74,22 @@ async def save_queue(body: QueueIn, caller: CurrentCaller, session: DbSession) -
             body.original_order,
             body.current_index,
             body.position_ms,
+            player,
         )
     except web_queue.InvalidQueueError as error:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from None
+    except web_queue.PlayerNotFoundError as error:
+        raise _not_found(error) from None
     await session.commit()
     return RevisionOut(revision=revision)
 
 
 @router.get("/revision")
-async def get_revision(caller: CurrentCaller, session: DbSession) -> RevisionOut:
+async def get_revision(
+    caller: CurrentCaller, session: DbSession, player: uuid.UUID | None = None
+) -> RevisionOut:
     """Cheap check: has another browser changed the queue?"""
-    return RevisionOut(revision=await web_queue.revision(session, caller.user))
+    try:
+        return RevisionOut(revision=await web_queue.revision(session, caller.user, player))
+    except web_queue.PlayerNotFoundError as error:
+        raise _not_found(error) from None

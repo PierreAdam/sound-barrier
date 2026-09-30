@@ -13,6 +13,7 @@ from app.api import (
     lyrics,
     manage,
     new_releases,
+    players,
     plugins,
     preferences,
     queue,
@@ -32,6 +33,7 @@ def build_router() -> APIRouter:
     router.include_router(new_releases.router)
     router.include_router(preferences.router)
     router.include_router(queue.router)
+    router.include_router(players.router)
     router.include_router(spoken.router)
     router.include_router(external.router)
     router.include_router(covers.router)

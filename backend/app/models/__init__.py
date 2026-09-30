@@ -30,6 +30,7 @@ from app.models.userdata import (
     PlayQueue,
     PlayQueueEntry,
     SongAnnotation,
+    WebPlayer,
     WebPlayQueue,
 )
 from app.models.users import ApiKey, AppUser, UserMusicFolder, WebSession
@@ -71,6 +72,7 @@ __all__ = [
     "Transcript",
     "UserMusicFolder",
     "WebPlayQueue",
+    "WebPlayer",
     "WebSession",
     "WorkerToken",
 ]

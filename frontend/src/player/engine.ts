@@ -343,10 +343,14 @@ export class PlayerEngine {
     if (deck.paused) {
       void deck.play().catch(() => this.emit());
     } else {
-      this.cancelFade();
-      this.clearStopTimer();
-      deck.pause();
+      this.pause();
     }
+  }
+
+  pause(): void {
+    this.cancelFade();
+    this.clearStopTimer();
+    this.deck.pause();
   }
 
   next(): void {

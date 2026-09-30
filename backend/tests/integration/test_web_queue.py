@@ -80,3 +80,80 @@ async def test_invalid_queue_refused(
 async def test_web_queue_needs_a_session(app: FastAPI) -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         assert (await client.get("/api/queue")).status_code == 401
+
+
+async def test_players_keep_their_own_queue(
+    app: FastAPI, user: SubsonicUser, admin: SubsonicUser, library: Path, db: Database
+) -> None:
+    album_tracks(library, "Band", "Album", 2)
+    await run_scan(db)
+    ids = await _song_ids(db)
+
+    async with signed_in(app, user) as client:
+        assert (await client.get("/api/players")).json() == {
+            "shared": {"songCount": 0, "updatedAt": None},
+            "players": [],
+            "maxPlayers": 20,
+        }
+        created = await client.post("/api/players", json={"name": "  Phone  "})
+        assert created.status_code == 201
+        phone = created.json()
+        assert (phone["name"], phone["songCount"]) == ("Phone", 0)
+
+        # The Shared queue and the phone's never mix.
+        shared = {"songIds": [ids[0]], "currentIndex": 0, "positionMs": 1000}
+        await client.put("/api/queue", json=shared)
+        mine = {"songIds": [ids[1], ids[0]], "currentIndex": 1, "positionMs": 5000}
+        saved = await client.put("/api/queue", params={"player": phone["id"]}, json=mine)
+        assert saved.json() == {"revision": 1}
+        queue = (await client.get("/api/queue", params={"player": phone["id"]})).json()
+        assert ([s["id"] for s in queue["songs"]], queue["positionMs"]) == ([ids[1], ids[0]], 5000)
+        assert [s["id"] for s in (await client.get("/api/queue")).json()["songs"]] == [ids[0]]
+        revision = await client.get("/api/queue/revision", params={"player": phone["id"]})
+        assert revision.json() == {"revision": 1}
+        listed = (await client.get("/api/players")).json()
+        assert [(p["name"], p["songCount"]) for p in listed["players"]] == [("Phone", 2)]
+        assert listed["shared"]["songCount"] == 1
+
+        renamed = await client.put(f"/api/players/{phone['id']}", json={"name": "My phone"})
+        assert renamed.json()["name"] == "My phone"
+
+    # Another user's player does not exist for them.
+    async with signed_in(app, admin) as other:
+        assert (await other.get("/api/players")).json()["players"] == []
+        for response in (
+            await other.get("/api/queue", params={"player": phone["id"]}),
+            await other.put("/api/queue", params={"player": phone["id"]}, json=mine),
+            await other.delete(f"/api/players/{phone['id']}"),
+        ):
+            assert response.status_code == 404
+
+    async with signed_in(app, user) as client:
+        assert (await client.delete(f"/api/players/{phone['id']}")).status_code == 204
+        gone = await client.get("/api/queue", params={"player": phone["id"]})
+        assert gone.status_code == 404  # the browser goes back to Shared
+        assert [s["id"] for s in (await client.get("/api/queue")).json()["songs"]] == [ids[0]]
+
+
+async def test_player_names(app: FastAPI, user: SubsonicUser) -> None:
+    async with signed_in(app, user) as client:
+        assert (await client.post("/api/players", json={"name": "PC"})).status_code == 201
+        refused = {
+            "pc": 409,  # whatever the case
+            "shared": 400,  # the player every browser uses
+            " ": 400,
+            "x" * 41: 400,
+        }
+        for name, code in refused.items():
+            assert (await client.post("/api/players", json={"name": name})).status_code == code
+        tablet = (await client.post("/api/players", json={"name": "Tablet"})).json()
+        taken = await client.put(f"/api/players/{tablet['id']}", json={"name": "PC"})
+        assert taken.status_code == 409
+        same = await client.put(f"/api/players/{tablet['id']}", json={"name": "tablet"})
+        assert same.json()["name"] == "tablet"  # its own name, another case
+
+        for number in range(18):
+            await client.post("/api/players", json={"name": f"Player {number}"})
+        assert len((await client.get("/api/players")).json()["players"]) == 20
+        full = await client.post("/api/players", json={"name": "One more"})
+        assert (full.status_code, full.json()["detail"]) == (400, "You can have at most 20 players")

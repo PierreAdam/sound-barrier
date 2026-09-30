@@ -357,7 +357,10 @@ export interface UserPreferences {
 
 // --- web play queue ------------------------------------------------------------
 
-/** The web UI's queue, kept on the server: one per user, shared by all browsers. */
+/**
+ * A player's queue, kept on the server: the Shared one (every browser not assigned to a
+ * player), or that of a player the user created (`playerId`).
+ */
 export interface SavedQueue {
   revision: number; // 0: never saved
   songs: Child[]; // play order
@@ -373,6 +376,24 @@ export interface QueueToSave {
   currentIndex: number;
   positionMs: number;
 }
+
+/** A player the user created (e.g. "Phone"): browsers assigned to it play its own queue. */
+export interface WebPlayer {
+  id: string;
+  name: string;
+  songCount: number; // in its queue
+  createdAt: string;
+  updatedAt: string; // its queue's last save
+}
+
+export interface WebPlayers {
+  shared: { songCount: number; updatedAt: string | null }; // updatedAt null: never saved
+  players: WebPlayer[]; // by name
+  maxPlayers: number;
+}
+
+/** `?player=` for a player's queue, nothing for the Shared one. */
+const playerQuery = (playerId: string | null) => (playerId ? `?player=${encodeURIComponent(playerId)}` : "");
 
 // --- external services (artist information) --------------------------------------
 
@@ -732,10 +753,16 @@ export const api = {
   getPreferences: () => request<UserPreferences>("GET", "/preferences"),
   setPreferences: (preferences: UserPreferences) => request<UserPreferences>("PUT", "/preferences", preferences),
 
-  getQueue: () => request<SavedQueue>("GET", "/queue"),
-  getQueueRevision: () => request<{ revision: number }>("GET", "/queue/revision"),
-  saveQueue: (queue: QueueToSave, keepalive = false) =>
-    request<{ revision: number }>("PUT", "/queue", queue, { keepalive }),
+  getQueue: (playerId: string | null) => request<SavedQueue>("GET", `/queue${playerQuery(playerId)}`),
+  getQueueRevision: (playerId: string | null) =>
+    request<{ revision: number }>("GET", `/queue/revision${playerQuery(playerId)}`),
+  saveQueue: (playerId: string | null, queue: QueueToSave, keepalive = false) =>
+    request<{ revision: number }>("PUT", `/queue${playerQuery(playerId)}`, queue, { keepalive }),
+  getPlayers: () => request<WebPlayers>("GET", "/players"),
+  createPlayer: (name: string) => request<WebPlayer>("POST", "/players", { name }),
+  renamePlayer: (id: string, name: string) =>
+    request<WebPlayer>("PUT", `/players/${encodeURIComponent(id)}`, { name }),
+  deletePlayer: (id: string) => request<void>("DELETE", `/players/${encodeURIComponent(id)}`),
 
   getExternalSettings: () => request<ExternalSettings>("GET", "/external/settings"),
   setExternalSettings: (settings: ExternalSettingsUpdate) =>

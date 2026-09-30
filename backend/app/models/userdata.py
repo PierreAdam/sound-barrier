@@ -119,13 +119,9 @@ class PlayQueueEntry(Base):
     song_id: Mapped[uuid.UUID] = _song_fk()
 
 
-class WebPlayQueue(Base):
-    """The queue of the web UI: one per user, shared by all their browsers (reopening the
-    web UI anywhere brings it back). Subsonic clients keep theirs in `play_queue`."""
+class WebQueueMixin:
+    """A queue of the web UI (see WebPlayQueue and WebPlayer)."""
 
-    __tablename__ = "web_play_queue"
-
-    user_id: Mapped[uuid.UUID] = _user_fk(primary_key=True)
     # Play order. No foreign keys: songs deleted since are dropped when read.
     song_ids: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)))
     # Shuffled queues: the play positions in the original order (to turn shuffle off).
@@ -134,6 +130,33 @@ class WebPlayQueue(Base):
     position_ms: Mapped[int] = mapped_column(BigInteger)
     revision: Mapped[int]  # +1 at every save: browsers tell whether theirs is outdated
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class WebPlayQueue(WebQueueMixin, Base):
+    """The Shared player's queue: one per user, used by every browser not assigned to
+    one of their players (reopening the web UI anywhere brings it back). Subsonic
+    clients keep theirs in `play_queue`."""
+
+    __tablename__ = "web_play_queue"
+
+    user_id: Mapped[uuid.UUID] = _user_fk(primary_key=True)
+
+
+class WebPlayer(WebQueueMixin, Base):
+    """A player the user created (e.g. "Phone"), with its own queue: the browsers
+    assigned to it (kept in their local storage) play that queue instead of the Shared
+    one. Deleted with its queue."""
+
+    __tablename__ = "web_player"
+    __table_args__ = (
+        # Names are unique per user, whatever the case.
+        Index("uq_web_player_user_id_name", "user_id", func.lower(text("name")), unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = _user_fk()
+    name: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class Bookmark(Base):

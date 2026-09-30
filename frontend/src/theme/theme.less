@@ -2383,6 +2383,144 @@ select.field__input {
   }
 }
 
+// Queue panel: the player this browser plays, a pill (icon, label, the player's name)
+// opening a menu of the user's players. Tinted when it is one of their own players rather
+// than Shared.
+.player-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: @space-2;
+  height: 30px;
+  padding: 0 @space-2 0 @space-3;
+  border: 1px solid @color-border;
+  border-radius: @radius-round;
+  background: color-mix(in srgb, @color-text 4%, transparent);
+  color: @color-text-muted;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 120ms, background-color 120ms;
+
+  &:hover,
+  &.dropdown__button--open {
+    border-color: color-mix(in srgb, @color-accent 50%, @color-border);
+  }
+
+  &:focus-visible {
+    border-color: @color-accent;
+    outline: none;
+  }
+
+  .icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  &__label {
+    font-size: @font-size-xs;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  &__name {
+    overflow: hidden;
+    max-width: 180px;
+    color: @color-text;
+    font-size: @font-size-sm;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // The arrow turns when the menu is open.
+  > .icon:last-child {
+    transition: transform 120ms;
+  }
+
+  &.dropdown__button--open > .icon:last-child {
+    transform: rotate(180deg);
+  }
+
+  &--own {
+    border-color: color-mix(in srgb, @color-accent 45%, @color-border);
+    background: color-mix(in srgb, @color-accent 12%, transparent);
+    color: @color-accent;
+  }
+}
+
+.player-switch-menu {
+  display: flex;
+
+  // Under the pill, from its left edge (placed against the window: the queue's slot
+  // clips what goes below the queue).
+  .dropdown__panel {
+    width: 320px;
+    max-width: calc(100vw - 2 * @space-4);
+  }
+
+  &__hint {
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+    line-height: 1.4;
+  }
+
+  &__item {
+    gap: @space-2;
+  }
+
+  &__check {
+    display: inline-flex;
+    width: 18px;
+    flex: none;
+    color: @color-accent;
+
+    .icon {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  &__name {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+  }
+
+  &__detail {
+    margin-left: auto;
+    padding-left: @space-3;
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+  }
+}
+
+// My account, "Players"
+.players-table {
+  &__note {
+    font-size: @font-size-xs;
+  }
+
+  &__rename {
+    display: flex;
+    gap: @space-2;
+
+    .field__input {
+      width: 200px;
+    }
+  }
+}
+
+.players-create {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: @space-2;
+
+  .field__input {
+    width: 240px;
+  }
+}
+
 // Settings, "Transcripts" tab -------------------------------------------------------
 
 .token-created {
