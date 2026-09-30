@@ -122,10 +122,32 @@ On first run the script creates `backend/.venv`, installs the dependencies, crea
 
 One image holds the backend, the web UI and ffmpeg; Postgres runs next to it.
 
+### From the pre-built image (Docker Hub)
+
+The image is published on Docker Hub:
+[`dontpanic57/sound-barrier`](https://hub.docker.com/r/dontpanic57/sound-barrier)
+(`latest`, or a version such as `1.0.0`; linux/amd64). No need to clone the repository:
+
+```bash
+mkdir sound-barrier && cd sound-barrier
+curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/PierreAdam/sound-barrier/master/docker/docker-compose.yml
+curl -fsSL -o .env https://raw.githubusercontent.com/PierreAdam/sound-barrier/master/docker/.env.example
+# edit .env: POSTGRES_PASSWORD, MUSIC_DIR, IMPORT_DIR, PUID / PGID, TZ
+docker compose up -d
+```
+
+Updating: `docker compose pull && docker compose up -d` (migrations are applied on
+start). To stay on a version, set `SOUND_BARRIER_VERSION=1.0.0` in `.env`.
+
+### From the sources
+
 ```bash
 cp docker/.env.example docker/.env      # set POSTGRES_PASSWORD, MUSIC_DIR, IMPORT_DIR, PUID/PGID, TZ
+# in docker/docker-compose.yml, uncomment `build: ..`
 docker compose -f docker/docker-compose.yml up -d --build
 ```
+
+### Then
 
 Open `http://<server>:4040` (web UI and Subsonic clients on the same port), sign in with
 `admin` / `admin` and **change the password**.
@@ -165,9 +187,6 @@ From `frontend/`:
 ```bash
 npm run typecheck && npm test && npm run build
 ```
-
-A [Navidrome](https://www.navidrome.org/) reference server can be started next to it to
-compare API responses on the same library: `docker compose --profile reference up navidrome`.
 
 ## License
 

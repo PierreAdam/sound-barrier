@@ -1,5 +1,6 @@
 # Sound-Barrier: backend + web UI in one image, served on port 4040.
 # Build from the repository root:  docker build -t sound-barrier .
+# Published as dontpanic57/sound-barrier (Docker Hub).
 
 # --- web UI ---------------------------------------------------------------------------
 FROM node:22-slim AS web
@@ -11,6 +12,8 @@ RUN npm run build
 
 # --- server ---------------------------------------------------------------------------
 FROM python:3.13-slim
+ARG VERSION=dev
+LABEL org.opencontainers.image.title="Sound-Barrier"       org.opencontainers.image.description="Subsonic-compatible music server with a web player, beets-powered library management, podcasts and audiobooks"       org.opencontainers.image.source="https://github.com/PierreAdam/sound-barrier"       org.opencontainers.image.licenses="MIT"       org.opencontainers.image.version="${VERSION}"
 
 # ffmpeg: FLAC -> MP3 conversion while importing.
 RUN apt-get update \

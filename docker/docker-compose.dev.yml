@@ -1,5 +1,6 @@
-# Local development services for Sound-Barrier.
-# Credentials below are for local development only.
+# Local development services for Sound-Barrier (./dev.sh starts them): the Postgres
+# database of the backend. Credentials below are for local development only.
+# To run Sound-Barrier on a server, see docker-compose.yml (next to this file).
 
 # Fixed project name: containers and volumes do not depend on the folder name.
 name: sound-barrier
@@ -21,19 +22,5 @@ services:
       timeout: 3s
       retries: 10
 
-  # Reference server, used to compare API responses on the same library.
-  # Start it with: docker compose --profile reference up navidrome
-  navidrome:
-    image: deluan/navidrome:latest
-    profiles: ["reference"]
-    ports:
-      - "4533:4533"
-    environment:
-      ND_LOGLEVEL: info
-    volumes:
-      - navidrome-data:/data
-      - ${MUSIC_DIR:-./music}:/music:ro
-
 volumes:
   postgres-data:
-  navidrome-data:

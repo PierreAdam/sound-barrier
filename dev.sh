@@ -44,7 +44,7 @@ port_in_use() {
 
 if [ "${1:-}" = "down" ]; then
   step "Stopping Postgres"
-  docker compose -f "$ROOT/docker-compose.yml" stop postgres
+  docker compose -f "$ROOT/docker/docker-compose.dev.yml" stop postgres
   exit 0
 elif [ -n "${1:-}" ]; then
   die "unknown command: $1 (usage: ./dev.sh [down])"
@@ -89,12 +89,12 @@ info "docker, node $(node --version), $("$PYTHON" --version)"
 # --- database -----------------------------------------------------------------
 
 step "Starting Postgres"
-docker compose -f "$ROOT/docker-compose.yml" up -d postgres >/dev/null
+docker compose -f "$ROOT/docker/docker-compose.dev.yml" up -d postgres >/dev/null
 for _ in $(seq 1 60); do
-  docker compose -f "$ROOT/docker-compose.yml" exec -T postgres pg_isready -U soundbarrier -d soundbarrier >/dev/null 2>&1 && break
+  docker compose -f "$ROOT/docker/docker-compose.dev.yml" exec -T postgres pg_isready -U soundbarrier -d soundbarrier >/dev/null 2>&1 && break
   sleep 1
 done
-docker compose -f "$ROOT/docker-compose.yml" exec -T postgres pg_isready -U soundbarrier -d soundbarrier >/dev/null 2>&1 ||
+docker compose -f "$ROOT/docker/docker-compose.dev.yml" exec -T postgres pg_isready -U soundbarrier -d soundbarrier >/dev/null 2>&1 ||
   die "Postgres did not become ready"
 info "localhost:5432"
 

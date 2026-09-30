@@ -9,7 +9,7 @@ On Linux/macOS, replace `.venv/Scripts/` with `.venv/bin/`.
 
 ```bash
 # from the repository root: start Postgres
-docker compose up -d postgres
+docker compose -f docker/docker-compose.dev.yml up -d postgres
 
 # from backend/
 python -m venv .venv

@@ -1,14 +1,16 @@
-# Sound-Barrier on a server: the application and its Postgres database.
-#   cp docker/.env.example docker/.env   (then edit it)
-#   docker compose -f docker/docker-compose.yml up -d --build
+# Sound-Barrier on a server: the application (pre-built image from Docker Hub) and its
+# Postgres database. Put this file and .env (from .env.example) in a folder, then:
+#   docker compose up -d
 # Web UI and Subsonic clients: http://<server>:4040 (first login admin / admin).
+# Update: docker compose pull && docker compose up -d
+# From the sources instead: uncomment `build`, then docker compose up -d --build.
 
 name: sound-barrier
 
 services:
   sound-barrier:
-    build: ..
-    image: sound-barrier:latest
+    image: dontpanic57/sound-barrier:${SOUND_BARRIER_VERSION:-latest}
+    # build: ..   # the repository root, when this file is in its docker/ folder
     restart: unless-stopped
     # Owner (uid:gid) of the music files: imports write into the library as this user.
     user: "${PUID:-1000}:${PGID:-1000}"
@@ -25,7 +27,9 @@ services:
       # Settings → Library). Unset: empty folders next to this file.
       - ${PODCASTS_DIR:-./podcasts}:/podcasts
       - ${AUDIOBOOKS_DIR:-./audiobooks}:/audiobooks
-      - ${IMPORT_DIR:?set IMPORT_DIR in .env}:/import:ro # imports copy, never modify
+      # Where new music arrives (e.g. your downloads). Read-only is enough in the default
+      # "copy" import mode; the "move" mode needs read-write.
+      - ${IMPORT_DIR:-./import}:/import:ro
       - ${BEETS_DIR:-./beets}:/beets
       - ${DATA_DIR:-./data}:/data
     depends_on:

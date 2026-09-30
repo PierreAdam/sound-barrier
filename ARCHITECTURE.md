@@ -27,7 +27,7 @@ through our own endpoints under `/api` (sections 8–9). Target: one Docker cont
 | Dependency management | uv |
 | Lint / format / types | ruff, pyright (strict) |
 | Tests | pytest, pytest-asyncio, httpx, Testcontainers (Postgres) |
-| Local environment | docker-compose (Postgres + optional Navidrome as reference server) |
+| Local environment | docker-compose (Postgres) |
 
 ---
 
@@ -64,9 +64,8 @@ Rules:
 ```
 sound-barrier/
 ├── ARCHITECTURE.md
-├── docker-compose.yml        # development services (Postgres)
 ├── Dockerfile                # application image (backend + web UI)
-├── docker/                   # production compose file, .env example, entrypoint
+├── docker/                   # compose files (production; docker-compose.dev.yml: dev Postgres), .env example, entrypoint
 ├── backend/
 │   ├── pyproject.toml
 │   ├── alembic.ini

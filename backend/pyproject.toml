@@ -1,6 +1,6 @@
 [project]
 name = "sound-barrier"
-version = "0.1.0"
+version = "1.0.0"
 description = "Self-hosted music server implementing the Subsonic API"
 requires-python = ">=3.12"
 dependencies = [

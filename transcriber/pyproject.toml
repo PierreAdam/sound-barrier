@@ -1,6 +1,6 @@
 [project]
 name = "sb-transcriber"
-version = "0.1.0"
+version = "1.0.0"
 description = "Companion app of Sound-Barrier: speech to text of podcasts and audiobooks on a GPU"
 requires-python = ">=3.11,<3.14"
 dependencies = [
