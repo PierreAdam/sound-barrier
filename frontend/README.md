@@ -9,7 +9,8 @@ through a separate client.
 ```bash
 # backend first (from backend/): .venv/Scripts/sound-barrier serve
 npm install
-npm run dev        # http://localhost:5173, proxies /rest and /api to http://localhost:4040
+npm run dev        # http://localhost:5173, proxies /rest and /api (and the WebSocket
+                   # /api/remote/ws) to http://localhost:4040
 ```
 
 Set `SOUND_BARRIER_BACKEND_URL` to proxy to another backend.
@@ -31,12 +32,18 @@ src/
 │                 native.ts (our own /api: session cookie, library, scans, schedule)
 ├── auth/         AuthContext: login, session restore, logout
 ├── player/       engine.ts (queue, shuffle, repeat, crossfade on two <audio> decks),
-│                 queue.ts (pure queue logic), PlayerContext (React + OS media keys)
+│                 queue.ts (pure queue logic), PlayerContext (React + OS media keys),
+│                 useWebQueue (the queue saved on the server), webPlayer.ts (this
+│                 browser's player: Shared or one the user created)
+├── remote/       remote control: socket.ts (/api/remote/ws, reconnects), protocol.ts,
+│                 RemoteTargetBridge (this tab, when controllable), RemoteToggle (queue
+│                 panel), RemotePage (the full-screen remote)
 ├── components/   AppShell (layout), TopBar, SidePanel (pages + artist index),
-│                 PlayerDock = PlayerBar + QueuePanel (opens on hover, drag-and-drop reorder),
-│                 CoverArt, LoginPage, Icons
+│                 PlayerDock = PlayerBar + QueuePanel (opens on hover, drag-and-drop reorder;
+│                 PlayerSwitch: the player menu), CoverArt, LoginPage, Icons
 ├── pages/        Home, Browse (index), Artist, Album, About,
-│                 Account (everyone, from the username in the top bar): account/ (password, player),
+│                 Account (everyone, from the username in the top bar): account/ (password, player,
+│                 players),
 │                 Settings (admins only): settings/ (library + scan progress, schedule, users),
 │                 Library Management (admins only): manage/ (import + browser, review, delete)
 └── theme/        theme.less: every style, design tokens at the top

@@ -349,15 +349,22 @@ Album and artist play counts are derived from song scrobbles.
 | playlist_id | uuid FK → playlist |
 | user_id | uuid FK → app_user |
 
-#### `web_play_queue` (web UI, `GET/PUT /api/queue`)
+#### `web_play_queue` / `web_player` (web UI, `GET/PUT /api/queue`, `/api/players`)
 
-The web UI's queue, one per user and shared by all their browsers, like the original
-Subsonic web player: opening the web UI anywhere brings it back (paused, at the saved
-position). Kept apart from the Subsonic clients' queue below: the two never mix.
+The web UI's queues. By default one per user, the **Shared** player's, used by all their
+browsers like the original Subsonic web player: opening the web UI anywhere brings it
+back (paused, at the saved position). The user can also create **players** (e.g.
+"Phone"): a browser assigned to one (kept in its local storage, per account) plays that
+player's queue instead. Kept apart from the Subsonic clients' queue below: they never mix.
 
 | Table | Fields |
 |---|---|
 | `web_play_queue` | user_id PK, song_ids uuid[] (play order, no FK: songs gone are dropped when read), original_order int[] null (shuffled: play positions in the original order), current_index, position_ms, revision (+1 per save), updated_at |
+| `web_player` | id PK, user_id FK → app_user, name (unique per user whatever the case: index on `(user_id, lower(name))`; "Shared" reserved; at most 40 characters, 20 players per user), created_at, and the same queue columns (`WebQueueMixin`). Deleted with its queue; a browser still assigned to it gets a 404 and goes back to Shared |
+
+Switching player in a browser saves what it has not saved yet to the player it was on
+(like leaving the page), pauses, and loads the other player's queue. Queues are not moved
+from one player to another. Audiobook and podcast progress stays per user (`bookmark`).
 
 Saved by the web UI (`useWebQueue`) about 1 s after a change, every 20 s while playing,
 on pause, and when the page closes (only if that tab has unsaved changes or is playing, so
@@ -501,7 +508,9 @@ never stored), created_at, expires_at (12 h, or 30 days with "remember me"), las
 | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | anyone / signed in | session |
 | `PUT /api/auth/password` | signed in | own password; other sessions are closed, this one kept |
 | `GET/PUT /api/preferences` | any user | the caller's web UI preferences, stored in `app_user.preferences` (JSONB): theme (`mode` dark / light / system, `accent` palette), player crossfade (on/off, seconds) and the "Missing albums" categories (`discography.categories`, default `["album"]`). Volume, shuffle and repeat stay in each browser |
-| `GET/PUT /api/queue`, `GET /api/queue/revision` | any user | the caller's web queue (songs in the Subsonic `Child` format, original order when shuffled, current index, position); the revision tells whether another browser changed it |
+| `GET/PUT /api/queue`, `GET /api/queue/revision` (`?player=`) | any user | the caller's web queue (songs in the Subsonic `Child` format, original order when shuffled, current index, position): the Shared one, or a player's (`?player=<id>`; another user's, or a deleted one, is a 404); the revision tells whether another browser changed it |
+| `GET/POST /api/players`, `PUT/DELETE /api/players/{id}` | any user | the caller's players (`services/web_queue.py`): list (with the Shared queue's size), create, rename, delete (with its queue) |
+| `/api/remote/ws` (WebSocket) | any user (session cookie, same origin only) | remote control, below |
 | `GET/PUT /api/external/settings` | admin | Last.fm API key (checked with Last.fm, stored encrypted with the secret key, never sent back) fanart.tv API key (same), the artist picture source (`none`, `deezer`, `fanarttv`; providers in `app/external/pictures.py`; album cover sources in `app/external/covers.py`: Deezer, and fanart.tv and the Cover Art Archive for albums with a MusicBrainz release group id), and MusicBrainz lookups on/off (`musicbrainz`) |
 | `GET /api/artists/{id}/info`, `POST .../info/refresh` (admin) | any user | biography, similar artists (linked when in the library), top songs of the library, picture credit; cached 30 days in `artist_info` (1 day after a failure), picture file in `<data>/artist-pictures/`, served by `getCoverArt` (artist id or `ar-<id>-<version>`) |
 | `GET /api/artists/{id}/discography`, `POST .../discography/refresh` (admin) | any user | "Missing albums" (`services/discography.py`, spec in `docs/specs/missing-albums.md`): the artist's release groups on MusicBrainz (`release-group-status=website-default`, one request per second server-wide), each with its category (`album`, `album+live`...) and the library album it is (by release group id, release id, then title); cached 7 days in `artist_info` |
@@ -523,6 +532,31 @@ never stored), created_at, expires_at (12 h, or 30 days with "remember me"), las
 | `GET/PUT /api/library` | admin | the library folder (single folder in the UI; changing the path keeps the folder id, then a quick scan starts) |
 | `GET /api/scan`, `POST /api/scan` | admin | detailed scan status (phase, files read / to read, totals, next run), start a scan |
 | `GET/PUT /api/scan/schedule` | admin | daily scan time, on/off, scan at startup |
+
+### Remote control (`/api/remote/ws`)
+
+A web UI tab the user made controllable (queue panel, "Remote control": off again when
+the page reloads) is a **target**; the "Remote control" page (menu under the username),
+on another tab, computer or phone, is a **remote**. `services/remote.py` (`RemoteHub`)
+relays JSON messages between the WebSockets of a same user, in memory (nothing stored,
+so one server process):
+
+- a target registers (`target`: its player, the player's name, the browser's name), then
+  reports its player's state when it changes and every 10 s while playing (`state`:
+  track, playing, position and rate, volume, shuffle...; remotes advance the position
+  themselves);
+- a remote gets the user's targets (`remote` → `targets`) and their states, and sends
+  commands (`command`: the player bar's controls only, `COMMANDS`), which the target
+  applies through its own player engine as if its buttons were clicked (the values are
+  checked there);
+- one target per player (Shared or created): another tab asking gets `conflict`, and may
+  take over (`takeOver`: the first gets `replaced`).
+
+The WebSocket is signed in by the session cookie and only accepted when the `Origin` is
+the `Host` it came to: browsers send cookies with cross-site WebSockets too. Frontend:
+`src/remote/` (`RemoteSocket` reconnects on its own; `RemoteTargetBridge` is the target
+side, mounted in the app shell; `RemotePage` the remote). Reverse proxies must forward
+the WebSocket upgrade (README, "Behind a reverse proxy").
 
 User management uses the Subsonic endpoints (`getUsers`, `createUser`, `updateUser`,
 `deleteUser`, `changePassword`) since Subsonic covers it. Two roles: **admin** and

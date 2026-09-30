@@ -119,6 +119,13 @@ Decisions taken on what is left to do (2026-09-28). The design of what exists is
 8. ✅ **Keyboard shortcuts** (web player): Space plays / pauses, ← / → go 10 s back /
    forward, except while typing (text fields, lists), on focused buttons (Space) and
    sliders or menus (arrows).
+9. ✅ **Players** (a queue per device): browsers play the Shared queue unless assigned to
+   a player the user created (My account; switch from the queue panel), which keeps its
+   own queue.
+10. ✅ **Remote control**: a tab made controllable (queue panel) is driven from another
+    tab, computer or phone ("Remote control" page): the player bar's controls, through a
+    WebSocket relayed by the server. Later: the target's queue on the remote (view,
+    add, remove, by track ids).
 
 ## Maybe later
 

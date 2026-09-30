@@ -14,12 +14,17 @@ services:
     restart: unless-stopped
     # Owner (uid:gid) of the music files: imports write into the library as this user.
     user: "${PUID:-1000}:${PGID:-1000}"
+    # Web UI, Subsonic API and the remote control's WebSocket (/api/remote/ws), all on this
+    # one port. Behind a reverse proxy: "127.0.0.1:${PORT:-4040}:4040" (only the proxy
+    # reaches it), FORWARDED_ALLOW_IPS=* in .env, and the proxy must forward WebSockets
+    # (README, "Behind a reverse proxy").
     ports:
       - "${PORT:-4040}:4040"
     environment:
       TZ: ${TZ:-UTC} # scan schedule times are in this time zone
       SOUND_BARRIER_DATABASE_URL: postgresql+asyncpg://soundbarrier:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/soundbarrier
-      # Behind a reverse proxy (HTTPS): trust its X-Forwarded-* headers.
+      # Behind a reverse proxy (HTTPS): trust its X-Forwarded-* headers. Through Docker's
+      # port mapping the proxy's connections come from Docker's bridge, not 127.0.0.1.
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
     volumes:
       - ${MUSIC_DIR:?set MUSIC_DIR in .env}:/music

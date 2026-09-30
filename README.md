@@ -47,6 +47,12 @@ review, helped by Audible, MusicBrainz, Open Library and iTunes.
 - Home, artist and album pages, artist index, search, playlists, cover picker.
 - Player with a persistent queue shared by your browsers (drag-and-drop reordering, undo),
   shuffle, repeat, crossfade, OS media keys and keyboard shortcuts (Space, ← / →).
+- **Players**: give a browser (your phone) a queue of its own, while the others keep the
+  shared one. Create them in My account, switch from the queue panel.
+- **Remote control**: turn it on in a tab's queue panel, then drive that tab from another
+  tab, computer or phone ("Remote control" in the menu under your name): play / pause,
+  seek, previous / next, volume, shuffle, repeat, speed... Needs WebSockets through your
+  reverse proxy ([below](#behind-a-reverse-proxy-https)).
 - **Now playing**: big cover, synced lyrics following the song (smooth scrolling, optional
   karaoke sweep, word by word when the lyrics have it) and a frequency visualizer.
 - Artist pages: "Play all", and the **missing albums** of the artist's MusicBrainz
@@ -162,7 +168,92 @@ Open `http://<server>:4040` (web UI and Subsonic clients on the same port), sign
 | `/data` | secret key, caches, import staging |
 
 The secret key is generated into `/data/secret.key` on first start: back it up together
-with the database. Behind a reverse proxy, set `FORWARDED_ALLOW_IPS` so HTTPS is detected.
+with the database.
+
+### Behind a reverse proxy (HTTPS)
+
+Everything goes through the one port (4040 in the container): the web UI, the Subsonic API
+(`/rest`), our API (`/api`) and one **WebSocket**, `/api/remote/ws` (remote control).
+Nothing more to publish from Docker, but the proxy has to let that WebSocket through.
+
+1. **Publish the port on the host's loopback only**, so that only the proxy reaches it,
+   and trust the proxy's `X-Forwarded-*` headers (HTTPS detected, real client addresses).
+   Behind Docker's port mapping the application sees the connections coming from Docker's
+   bridge, not from 127.0.0.1: with the port on the loopback only, `*` is safe.
+
+   ```yaml
+   # docker-compose.yml
+   services:
+     sound-barrier:
+       ports:
+         - "127.0.0.1:4040:4040"
+   ```
+
+   ```bash
+   # .env
+   FORWARDED_ALLOW_IPS=*
+   ```
+
+   A proxy running in Docker too, on the same network: no `ports` at all, it forwards to
+   `http://sound-barrier:4040`.
+
+2. **Forward the WebSocket** and keep the `Host` header: the WebSocket only accepts pages
+   of the site itself (its `Origin` must be the `Host` the request came to).
+
+   **nginx** (it drops the upgrade headers unless told otherwise):
+
+   ```nginx
+   upstream sound_barrier {
+       server 127.0.0.1:4040;
+   }
+
+   server {
+       server_name music.example.com;
+       # listen 443 ssl; ssl_certificate ...; (e.g. Certbot)
+
+       # Remote control: a WebSocket, open as long as a tab is (the server pings every 20 s).
+       location /api/remote/ws {
+           proxy_pass http://sound_barrier;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection "upgrade";
+           proxy_set_header Host $host;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+           proxy_read_timeout 1h;
+           proxy_send_timeout 1h;
+       }
+
+       location / {
+           proxy_pass http://sound_barrier;
+           proxy_http_version 1.1;
+           proxy_buffering off;  # streaming
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+   ```
+
+   **Caddy** and **Traefik** forward WebSockets and the `Host` header by default
+   (`reverse_proxy 127.0.0.1:4040`, or the usual router + service labels).
+   **Apache**: `mod_proxy_wstunnel`, with `ProxyPreserveHost On` and
+   `RewriteCond %{HTTP:Upgrade} websocket [NC]` → `ws://127.0.0.1:4040/$1 [P,L]`.
+
+When the WebSocket does not get through, the browser's console shows
+``WebSocket connection to 'wss://…/api/remote/ws' failed`` and the remote stays on
+"Connecting…". To check the proxy (the answer should be **403**, refused without a
+session: the WebSocket was reached; a 404 means the proxy dropped the upgrade headers):
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -H "Connection: Upgrade" -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  -H "Origin: https://music.example.com" https://music.example.com/api/remote/ws
+```
+
+Remote control is relayed in the server's memory: run **one** application container
+(no replicas); after a restart, tabs and remotes reconnect on their own.
 
 ### Deploying a new version
 
