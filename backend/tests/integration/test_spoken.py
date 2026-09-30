@@ -237,7 +237,10 @@ async def test_chapters_dismiss_and_delete(
         assert page["continueListening"] == []
         assert (await _call(client, user, "getBookmarks"))["bookmarks"].get("bookmark", []) == []
 
-    # Deleting a whole audiobook: its files and its entry go.
+    # Deleting a whole audiobook: its files and its entry go, its subtitles too, then its
+    # folder, left empty (not the author's: another book is in it).
+    path.with_suffix(".lrc").write_text("[00:01.00]Hello")
+    path.with_suffix(".srt").write_text("1\n00:00:01,000 --> 00:00:02,000\nHello\n")
     async with signed_in(app, admin) as web:
         response = await web.post(
             "/api/manage/delete", json={"albumIds": [shows["One File"]["id"]]}
@@ -248,3 +251,6 @@ async def test_chapters_dismiss_and_delete(
         titles = [s["title"] for s in (await web.get("/api/spoken/audiobooks")).json()["shows"]]
         assert titles == ["A Book"]
     assert not path.exists()
+    assert not path.with_suffix(".lrc").exists()
+    assert not path.parent.exists()  # "One File"
+    assert (path.parent.parent / "A Book").is_dir()  # "An Author" stays, with its other book

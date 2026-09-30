@@ -14,7 +14,6 @@ import { HomePage } from "./pages/HomePage";
 import { ManageLibraryPage } from "./pages/ManageLibraryPage";
 import { PlaylistPage } from "./pages/PlaylistPage";
 import { PlaylistsPage } from "./pages/PlaylistsPage";
-import { RemotePage } from "./remote/RemotePage";
 import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SpokenDetailsPage } from "./pages/SpokenDetailsPage";
@@ -37,7 +36,6 @@ export function App() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/account" element={<AccountPage />} />
             <Route path="/about" element={<AboutPage />} />
-            <Route path="/remote" element={<RemotePage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/playlists" element={<PlaylistsPage />} />
             <Route path="/playlists/:id" element={<PlaylistPage />} />

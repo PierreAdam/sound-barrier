@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { api, type ArtistInfo } from "../api/native";
 import { useSubsonic } from "../api/useSubsonic";
@@ -7,22 +7,25 @@ import { useSession } from "../auth/AuthContext";
 import { AlbumCard } from "../components/AlbumCard";
 import { CoverArt } from "../components/CoverArt";
 import { SongTable } from "../components/SongTable";
-import { AddIcon, DiscIcon, PlayIcon, PlayNextIcon, RefreshIcon } from "../components/Icons";
+import { AddIcon, DiscIcon, PlayIcon, PlayNextIcon, RefreshIcon, TrashIcon } from "../components/Icons";
 import { plural } from "../format";
 import { songToTrack, usePlayer, type Track } from "../player/PlayerContext";
 import { MissingAlbums } from "./artist/MissingAlbums";
+import { AlbumsDelete } from "./manage/DeleteTab";
 import { settingsUrl } from "./settings/tabs";
 
 /**
- * Artist view: header, actions, albums (or the missing ones, from MusicBrainz), then
- * biography, similar artists and top songs.
+ * Artist view: header, actions, albums (or the missing ones, from MusicBrainz; or, for
+ * admins, the albums to delete), then biography, similar artists and top songs.
  */
 export function ArtistPage() {
   const { id = "" } = useParams();
   const { user, client } = useSession();
   const { engine } = usePlayer();
   const [params, setParams] = useSearchParams();
-  const missingView = params.get("view") === "missing";
+  const view = params.get("view");
+  const missingView = view === "missing";
+  const navigate = useNavigate();
   const [loadingSongs, setLoadingSongs] = useState(false);
   const { data, error, loading } = useSubsonic("getArtist", { id });
   const artist = data?.artist;
@@ -73,8 +76,8 @@ export function ArtistPage() {
     }
   }
 
-  function toggleMissing() {
-    setParams(missingView ? {} : { view: "missing" }, { replace: true });
+  function toggleView(name: "missing" | "delete") {
+    setParams(view === name ? {} : { view: name }, { replace: true });
   }
 
   if (error) return <p className="text-error">{error.message}</p>;
@@ -129,16 +132,37 @@ export function ArtistPage() {
           className={`action-bar__item${missingView ? " action-bar__item--active" : ""}`}
           type="button"
           aria-pressed={missingView}
-          onClick={toggleMissing}
+          onClick={() => toggleView("missing")}
           title="The artist's discography on MusicBrainz, compared with the library"
         >
           <DiscIcon />
           Missing albums
         </button>
+        {user.adminRole && (
+          <button
+            className={`action-bar__item${view === "delete" ? " action-bar__item--active" : ""}`}
+            type="button"
+            aria-pressed={view === "delete"}
+            disabled={!albums.length}
+            onClick={() => toggleView("delete")}
+            title="Delete albums or songs of this artist from the library and the disk"
+          >
+            <TrashIcon />
+            Delete albums
+          </button>
+        )}
       </nav>
 
       {missingView ? (
         <MissingAlbums artistId={id} name={artist.name} admin={user.adminRole} />
+      ) : view === "delete" && user.adminRole ? (
+        <AlbumsDelete
+          albums={albums}
+          onDeleted={(albumIds) => {
+            // All of them: the artist went with them (nothing left of theirs).
+            if (albums.every((album) => albumIds.includes(album.id))) navigate("/browse", { replace: true });
+          }}
+        />
       ) : (
         <ul className="album-grid">
           {albums.map((album) => (

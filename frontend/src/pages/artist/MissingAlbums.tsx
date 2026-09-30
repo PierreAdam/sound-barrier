@@ -197,6 +197,15 @@ export function CategoryFilter({ categories }: { categories: FilterCategory[] })
         <button className="link-button" type="button" disabled={!preferences} onClick={() => choose((next) => keys.forEach((k) => next.delete(k)))}>
           None
         </button>
+        <button
+          className="link-button"
+          type="button"
+          disabled={!preferences}
+          title="Tick the unticked categories, untick the others"
+          onClick={() => choose((next) => keys.forEach((k) => (next.has(k) ? next.delete(k) : next.add(k))))}
+        >
+          Inverse
+        </button>
       </span>
     </div>
   );

@@ -14,8 +14,13 @@ import { coverVersion } from "../api/coverVersions";
 import type { SubsonicClient } from "../api/subsonic";
 import { useSession } from "../auth/AuthContext";
 import { usePreferences } from "../preferences/PreferencesContext";
+import { SCREEN_TARGET, screenLink } from "../cast/tv/screenLink";
+import { remoteLink } from "../remote/link";
+import { type PlayerMode, playHere, usePlayerMode } from "../remote/mode";
+import { RemoteController } from "../remote/RemoteController";
 import { resumeAudio } from "./audioGraph";
 import { createBookmarkKeeper, RESUME_FROM_S, FINISHED_S, STARTED_S } from "./bookmarks";
+import type { PlayerController } from "./controller";
 import { PlayerEngine, type PlayerSnapshot } from "./engine";
 import { createScrobbler } from "./scrobble";
 import { SEEK_STEP_S, shortcutFor } from "./shortcuts";
@@ -24,7 +29,18 @@ import { useWebQueue } from "./useWebQueue";
 export type { Track } from "./engine";
 export { songToTrack } from "./tracks";
 
-const PlayerContext = createContext<PlayerEngine | null>(null);
+interface PlayerValue {
+  /** This tab's own player: plays here (paused while in remote mode). */
+  local: PlayerEngine;
+  /** What the UI drives: the local player, or the remote one (remote mode). */
+  active: PlayerController;
+  mode: PlayerMode;
+}
+
+/** Remote mode: the player the UI drives (another tab, or a server player). */
+export type RemotePlayer = Extract<PlayerMode, { kind: "remote" }>;
+
+const PlayerContext = createContext<PlayerValue | null>(null);
 
 /** "Resumed at 12:34": shown by the player bar after an audiobook / podcast resumed. */
 export interface ResumeNotice {
@@ -70,37 +86,95 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     engine.attach(); // again after StrictMode's unmount (development)
     return () => engine.destroy();
   }, [engine]);
+  const mode = usePlayerMode();
+  const remote = useRemoteMode(engine, mode);
+  const active: PlayerController = mode.kind === "remote" ? remote : engine;
+  // What is tied to this tab's own playback stays with the local player.
   useMediaSession(engine, client);
   useSyncedPlayerPreferences(engine);
   useWebQueue(engine);
   useScrobbling(engine, client);
   useAudioResume(engine);
-  useShortcuts(engine);
   const resume = useBookmarks(engine, client);
+  // The keyboard drives what the player bar shows.
+  useShortcuts(active);
+  const value = useMemo(() => ({ local: engine, active, mode }), [engine, active, mode]);
   return (
-    <PlayerContext.Provider value={engine}>
+    <PlayerContext.Provider value={value}>
       <ResumeContext.Provider value={resume}>{children}</ResumeContext.Provider>
     </PlayerContext.Provider>
   );
 }
 
-/** Player state (re-renders on change) and the engine to send commands to. */
-export function usePlayer(): { state: PlayerSnapshot; engine: PlayerEngine } {
-  const engine = useContext(PlayerContext);
-  if (!engine) throw new Error("usePlayer must be used inside <PlayerProvider>");
-  const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
-  return { state, engine };
+function usePlayerValue(): PlayerValue {
+  const value = useContext(PlayerContext);
+  if (!value) throw new Error("The player hooks must be used inside <PlayerProvider>");
+  return value;
 }
 
 /**
- * The engine only, without following its state: for components that read the position
+ * Player state (re-renders on change) and the player to send commands to: this tab's, or
+ * in remote mode the one it controls (`remote`: which one; null: this tab's).
+ */
+export function usePlayer(): { state: PlayerSnapshot; engine: PlayerController; remote: RemotePlayer | null } {
+  const { active, mode } = usePlayerValue();
+  const state = useSyncExternalStore(active.subscribe, active.getSnapshot);
+  return { state, engine: active, remote: mode.kind === "remote" ? mode : null };
+}
+
+/**
+ * The player only, without following its state: for components that read the position
  * themselves (every animation frame) and must not re-render at every player tick, such
  * as the lyrics of a long audiobook.
  */
-export function usePlayerEngine(): PlayerEngine {
-  const engine = useContext(PlayerContext);
-  if (!engine) throw new Error("usePlayerEngine must be used inside <PlayerProvider>");
-  return engine;
+export function usePlayerEngine(): PlayerController {
+  return usePlayerValue().active;
+}
+
+/** This tab's own player, whatever the UI drives (settings, being controlled...). */
+export function useLocalPlayer(): PlayerEngine {
+  return usePlayerValue().local;
+}
+
+/**
+ * Remote mode: the remote player follows the target chosen in the Remote menu, and this
+ * tab's own player is paused (left as it was, for when it plays here again). The target
+ * gone (tab closed, server restarted): back to this tab, with a notice.
+ *
+ * This tab's own TV page ("screen": cast/tv) is driven through its own link, and its queue
+ * came from here: leaving it, the queue comes back here, where it was (playing if it was).
+ */
+function useRemoteMode(engine: PlayerEngine, mode: PlayerMode): RemoteController {
+  const remote = useMemo(() => new RemoteController(remoteLink), []);
+  const screen = useMemo(() => new RemoteController(screenLink), []);
+  const onScreen = mode.kind === "remote" && mode.targetKind === "screen";
+  const target = mode.kind === "remote" ? mode.target : null;
+  const name = mode.kind === "remote" ? mode.name : "";
+  useEffect(() => {
+    const controller = onScreen ? screen : remote;
+    const link = onScreen ? screenLink : remoteLink;
+    controller.connect(target);
+    if (!target) return;
+    engine.pause();
+    const check = () => {
+      const { targets } = link.getView();
+      if (targets && !targets.some((t) => t.id === target)) playHere(`${name} can no longer be controlled`);
+    };
+    const unsubscribe = link.subscribe(check);
+    return () => {
+      unsubscribe();
+      controller.connect(null);
+      if (onScreen && target === SCREEN_TARGET) {
+        const back = screenLink.takeBack();
+        screenLink.stop();
+        if (back && back.queue.tracks.length) {
+          engine.restoreQueue(back.queue);
+          if (back.playing) engine.togglePlay();
+        }
+      }
+    };
+  }, [remote, screen, engine, onScreen, target, name]);
+  return onScreen ? screen : remote;
 }
 
 /**
@@ -196,7 +270,7 @@ function useBookmarks(engine: PlayerEngine, client: SubsonicClient): ResumeValue
 }
 
 /** Space: play / pause; ← / →: 10 s back / forward (see shortcuts.ts for when they apply). */
-function useShortcuts(engine: PlayerEngine): void {
+function useShortcuts(engine: PlayerController): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const action = shortcutFor(event);

@@ -511,6 +511,9 @@ never stored), created_at, expires_at (12 h, or 30 days with "remember me"), las
 | `GET/PUT /api/queue`, `GET /api/queue/revision` (`?player=`) | any user | the caller's web queue (songs in the Subsonic `Child` format, original order when shuffled, current index, position): the Shared one, or a player's (`?player=<id>`; another user's, or a deleted one, is a 404); the revision tells whether another browser changed it |
 | `GET/POST /api/players`, `PUT/DELETE /api/players/{id}` | any user | the caller's players (`services/web_queue.py`): list (with the Shared queue's size), create, rename, delete (with its queue) |
 | `/api/remote/ws` (WebSocket) | any user (session cookie, same origin only) | remote control, below |
+| `GET/POST/PUT/DELETE /api/server-player` | any user | the caller's server player (below): its stream URL and listeners, start it (then driven through remote control), "play even when nobody listens" (`alwaysOn`), stop it |
+| `GET /api/stream/{key}` | anyone with the key | the server player's endless MP3 stream (a Chromecast has no session: the key, random and only in memory, is the permission; `Access-Control-Allow-Origin: *`); `?listener=` names the listener (the Cast receiver) |
+| `GET /api/stream/{key}/now`, `/cover?id=`, `/lyrics?song=` | anyone with the key (CORS) | for the Cast receiver: the stream's clock, the named listener's start on it and the timeline of what played when; covers and lyrics of what that player queued or just played (nothing else) |
 | `GET/PUT /api/external/settings` | admin | Last.fm API key (checked with Last.fm, stored encrypted with the secret key, never sent back) fanart.tv API key (same), the artist picture source (`none`, `deezer`, `fanarttv`; providers in `app/external/pictures.py`; album cover sources in `app/external/covers.py`: Deezer, and fanart.tv and the Cover Art Archive for albums with a MusicBrainz release group id), and MusicBrainz lookups on/off (`musicbrainz`) |
 | `GET /api/artists/{id}/info`, `POST .../info/refresh` (admin) | any user | biography, similar artists (linked when in the library), top songs of the library, picture credit; cached 30 days in `artist_info` (1 day after a failure), picture file in `<data>/artist-pictures/`, served by `getCoverArt` (artist id or `ar-<id>-<version>`) |
 | `GET /api/artists/{id}/discography`, `POST .../discography/refresh` (admin) | any user | "Missing albums" (`services/discography.py`, spec in `docs/specs/missing-albums.md`): the artist's release groups on MusicBrainz (`release-group-status=website-default`, one request per second server-wide), each with its category (`album`, `album+live`...) and the library album it is (by release group id, release id, then title); cached 7 days in `artist_info` |
@@ -535,28 +538,110 @@ never stored), created_at, expires_at (12 h, or 30 days with "remember me"), las
 
 ### Remote control (`/api/remote/ws`)
 
-A web UI tab the user made controllable (queue panel, "Remote control": off again when
-the page reloads) is a **target**; the "Remote control" page (menu under the username),
-on another tab, computer or phone, is a **remote**. `services/remote.py` (`RemoteHub`)
-relays JSON messages between the WebSockets of a same user, in memory (nothing stored,
-so one server process):
+One menu in the queue panel (`PlaybackMenu`, the "Player" pill) chooses where the player
+bar plays: **here**, on one of this browser's players (each keeps its own queue), and
+**controllable** or not by the user's other devices (off again when the page reloads); or
+**on another player** (remote mode: another tab, the server player). Its explanations are
+behind ⓘ icons (`InfoTip`: a popup on hover, focus or tap). `services/remote.py` (`RemoteHub`)
+relays JSON messages between the members of a same user, in memory (nothing stored, so
+one server process):
 
-- a target registers (`target`: its player, the player's name, the browser's name), then
-  reports its player's state when it changes and every 10 s while playing (`state`:
-  track, playing, position and rate, volume, shuffle...; remotes advance the position
-  themselves);
-- a remote gets the user's targets (`remote` → `targets`) and their states, and sends
-  commands (`command`: the player bar's controls only, `COMMANDS`), which the target
-  applies through its own player engine as if its buttons were clicked (the values are
-  checked there);
+- a **target** is a player that can be controlled: a tab made controllable (`browser`), or
+  the user's server player (`server`, below). It registers (`target`: its player, the
+  player's name, the device's name), reports its player's state when it changes and every
+  10 s while playing (`state`: the web player's snapshot without the queue, plus `rate`,
+  `currentKey`, `queueRevision`; remotes advance the position themselves), and its queue
+  when its entries change (`queue`: `{revision, keys, tracks}`, sent only to the remotes
+  watching it, since it can hold 5000 tracks; messages up to 4 MB);
+- a **remote** lists the user's targets (`remote` → `targets`, with their states), watches
+  one (`watch` → its `queue`), and sends commands (`command`, `COMMANDS`): the player
+  bar's controls and the queue's, whose entries are named by **key** (stable while
+  queued; never by position, which moves): `playQueue` / `add` / `playNext` (with the
+  tracks), `playAt`, `remove`, `move` (`before` another key), `clear`, `undo`. The target
+  applies them as its own controls would (the values are checked there, the tracks
+  filtered: `remote/protocol.ts` `tracksFrom`, `services/server_queue.py` `track_from`);
 - one target per player (Shared or created): another tab asking gets `conflict`, and may
   take over (`takeOver`: the first gets `replaced`).
 
+**Remote mode** (web UI): the player bar and the queue panel mirror the target; what is
+played or queued anywhere in the app goes to it. `usePlayer()` hands the UI a
+`PlayerController` (`player/controller.ts`): this tab's `PlayerEngine`, or a
+`RemoteController` (`remote/RemoteController.ts`) fed by `remote/link.ts` (one WebSocket,
+open while the menu or remote mode needs it) that sends every call as a command. Queue
+edits (drag and drop, removal) show at once and the target's answer replaces them; the
+current entry is found by its key. This tab's own player is paused and left as it was
+(its queue saving, scrobbles, bookmarks and lock screen stay local); the bar turns to a
+dull accent, "Playing on … · Play here" above the title. The target gone: back here, with
+a notice. No visualizer (nothing plays here); a server player has no volume (the device's
+own) and no crossfade.
+
 The WebSocket is signed in by the session cookie and only accepted when the `Origin` is
 the `Host` it came to: browsers send cookies with cross-site WebSockets too. Frontend:
-`src/remote/` (`RemoteSocket` reconnects on its own; `RemoteTargetBridge` is the target
-side, mounted in the app shell; `RemotePage` the remote). Reverse proxies must forward
-the WebSocket upgrade (README, "Behind a reverse proxy").
+`src/remote/` (`RemoteSocket` reconnects on its own; `RemoteTargetBridge` + `apply.ts` the
+target side, mounted in the app shell; `components/PlaybackMenu.tsx` the menu; `mode.ts` local / remote).
+Reverse proxies must forward the WebSocket upgrade (README, "Behind a reverse proxy").
+
+### Server player (`services/server_player.py`)
+
+A player on the server itself, whose sound is one endless MP3 stream
+(`/api/stream/<key>`) that a Chromecast (the web UI casts that URL: Google's Default Media
+Receiver, `src/cast/sender.ts`, Chrome and Edge only), VLC or any internet radio app plays.
+One per user for now, in memory (a restart ends it: its queue and key too). Started from
+the queue panel's menu; then a target of the user's hub like a tab (`ServerPlayers`: a hub member
+without WebSocket, whose `send` applies commands), driven in remote mode.
+
+    file -> ffmpeg decoder (one per track: PCM, 44.1 kHz stereo) -> pump -> ffmpeg encoder (MP3, 192 kbps) -> listeners
+
+- The pump sends 20 ms frames at real-time pace (devices' buffers stay small, commands are
+  heard within a few seconds); paused, silence (devices stay connected). A skip or a seek
+  replaces the decoder; the encoder runs as long as the player (one continuous stream,
+  whatever the files' formats). A new listener first gets the last 2 s.
+- The queue (`services/server_queue.py`) follows the web player's rules: keys, shuffle
+  around the current track, repeat, undo (20 levels), audiobooks and podcasts without
+  shuffle / repeat, chapters inside a file for previous / next, "Pause at end of chapter",
+  speed (ffmpeg `atempo`). Songs are only queued if the user may play them (`library_files`).
+- Without listeners it waits where it is, unless "Play even when nobody listens"
+  (`alwaysOn`, a radio).
+- **On the TV** (Chromecast): Sound-Barrier's own Cast receiver, `frontend/public/cast/
+  receiver.html` (plain HTML / JS, Google's receiver framework CAF), shows a Now playing
+  screen: cover, title, progress, synced lyrics, the audiobook chapter. The TV hears the
+  stream a few seconds late, so the player keeps a **timeline** (`now`): each change of
+  what plays (track, seek, pause, speed) stamped with the stream's own clock (seconds of
+  sound sent to the encoder), and the start of each named listener on that clock (a new
+  listener's first seconds are the burst). The receiver hears `start + audio.currentTime`
+  and shows the last change before it, advanced. A static page: hosted anywhere (the
+  server serves a copy), it learns the server and key from the stream URL. Its Cast app
+  id (Google Cast SDK Developer Console, "Custom Receiver" with the page's URL) goes in
+  Settings → External services (`cast_receiver_app_id`). `?stream=<stream URL>` previews
+  the screen in any browser; `&autoplay=1` starts the sound without a click (a TV).
+- **The ways to cast** (Cast button, the others under its "▾"; `src/cast/`): the Now
+  playing screen on the Chromecast, through our receiver when registered, else through
+  **DashCast** (`84912283`, a published receiver that opens a page, as Home Assistant's
+  dashboards do: the Chromecast opens receiver.html itself; a third party's page, given
+  its address with the stream's key: Settings → External services `dashcast`, on by
+  default); **"Cast from this computer"** (desktop Chrome, the Presentation API: Chrome
+  renders the page in a tab of its own and mirrors it to the TV; nothing goes to a third
+  party, the computer stays on); **"Cast audio only"** (Google's Default Media Receiver);
+  without the Cast SDK (phones), the browser's own picker (Remote Playback: Chromecast on
+  Android, AirPlay on Safari), and "Open in VLC".
+- Not yet: scrobbles and bookmarks of what it plays, its key kept across restarts.
+- Stream URLs use `SOUND_BARRIER_PUBLIC_URL` when set (the address devices reach the
+  server at), else the request's.
+
+### This browser's player on a TV (`src/cast/tv/`, `tv.html`)
+
+Without the server player: the Player menu's "Cast this player…" (desktop Chrome / Edge,
+the Presentation API: Chrome renders the TV page out of sight and mirrors it to a
+Chromecast) or "TV window" (a window: a TV plugged in). The TV page is a second Vite
+entry: it plays with its own `PlayerEngine` (scrobbles, bookmarks, Now playing with
+synced lyrics, the look of `public/cast/screen.css`), through the Subsonic API with the
+credentials this tab hands it over their private channel (`channel.ts`: the presentation
+connection, or `postMessage` between same-origin windows). This tab drives it in remote
+mode, a target of kind "screen" reached through `ScreenLink` (the remote link's interface,
+without the server's relay): the same commands (`remote/apply.ts`) and reports
+(`remote/reporter.ts`, shared with a controllable tab). Casting hands it this tab's queue
+where it is; "Play here", or the TV page closing, brings it back (advanced since its last
+report), playing if it was. Nothing leaves this browser but the music from the server.
 
 User management uses the Subsonic endpoints (`getUsers`, `createUser`, `updateUser`,
 `deleteUser`, `changePassword`) since Subsonic covers it. Two roles: **admin** and

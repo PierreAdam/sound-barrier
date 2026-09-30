@@ -2,6 +2,8 @@
 
 Only files inside their music folder are touched (checked on the real path), and album
 folders are removed only when nothing but sidecar files (covers, .nfo, .cue...) is left.
+A deleted file's own lyrics / subtitles (same name: `.lrc`, `.srt`, `.vtt`, e.g. an
+audiobook's transcript) go with it: they would be of nothing any more.
 """
 
 import asyncio
@@ -19,6 +21,9 @@ from app.scanner.scanner import refresh_derived_data
 
 # Called with the deleted files of one music folder (e.g. ImportManager.forget).
 type Forget = Callable[[list[Path], Path], Awaitable[None]]
+
+# Next to an audio file, with its name: its lyrics or subtitles (services/transcripts.py).
+COMPANION_SUFFIXES = (".lrc", ".srt", ".vtt")
 
 
 @dataclass
@@ -42,6 +47,10 @@ def _delete_files(plan: list[tuple[Path, Path]]) -> tuple[DeletionResult, dict[P
             result.files_deleted += 1
         else:
             result.files_already_gone += 1
+        for suffix in COMPANION_SUFFIXES:
+            companion = files.ensure_within(path.with_suffix(suffix), [root])
+            if companion.is_file():
+                companion.unlink()
         folders.setdefault(root, set()).add(path.parent)
     removed: dict[Path, list[Path]] = {}
     for root, parents in folders.items():

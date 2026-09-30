@@ -6,6 +6,8 @@ import type { Track } from "../player/engine";
 import { usePlayer, useResumeNotice } from "../player/PlayerContext";
 import { usePreferences } from "../preferences/PreferencesContext";
 import { keepFocus } from "../player/shortcuts";
+import { dismissModeNotice, playHere, useModeNotice } from "../remote/mode";
+import { useRemoteTarget } from "../remote/target";
 import { albumUrl, artistUrl } from "../player/tracks";
 import { CoverArt } from "./CoverArt";
 import { Dropdown } from "./Dropdown";
@@ -53,7 +55,7 @@ export function pauseAtEndLabel(track: Track | null): string {
  * left; transport controls in the middle; crossfade, time and volume on the right.
  */
 export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; onToggleQueue(): void }) {
-  const { state, engine } = usePlayer();
+  const { state, engine, remote } = usePlayer();
   const { current } = state;
   const disabled = current === null;
   const progress = state.duration > 0 ? Math.min(100, (state.position / state.duration) * 100) : 0;
@@ -62,12 +64,18 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
   const { preferences, update } = usePreferences();
   // Podcasts and audiobooks: short skips and a playback speed (music plays at 1x).
   const spoken = current?.longForm ?? false;
-  const speed = preferences?.player.spokenSpeed ?? 1;
+  // A remote shows (and changes) the speed of the player it controls; here, it is a preference.
+  const speed = remote ? state.speed : (preferences?.player.spokenSpeed ?? 1);
+  const speedReady = remote !== null || preferences !== null;
+  // A server player: the device playing its stream has its own volume, and no crossfade.
+  const serverPlayer = remote?.targetKind === "server";
   const skip = (seconds: number) =>
     engine.seek(Math.min(Math.max(engine.currentTime + seconds, 0), Math.max(state.duration - 0.5, 0)));
   const nextSpeed = () => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] ?? 1);
   const setSpeed = (next: number) =>
-    update((current) => ({ ...current, player: { ...current.player, spokenSpeed: next } }));
+    remote
+      ? engine.setSpokenSpeed(next)
+      : update((current) => ({ ...current, player: { ...current.player, spokenSpeed: next } }));
   const pauseLabel = pauseAtEndLabel(current);
   const [miniVisualizer, setMiniVisualizer] = useState(storedVisualizer);
   const chapters = current?.chapters;
@@ -87,7 +95,7 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
 
   return (
     // Mouse clicks on its buttons do not focus them: Space then still plays / pauses.
-    <footer className="player" aria-label="Player" onMouseDown={keepFocus}>
+    <footer className={`player${remote ? " player--remote" : ""}`} aria-label="Player" onMouseDown={keepFocus}>
       <input
         className="player__seek"
         type="range"
@@ -120,12 +128,13 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
           <CoverArt id={current?.coverArt} size={56} className="player__cover" />
         </button>
         <div className="player__meta">
+          <PlayerWhere />
           {current ? (
             <>
               <span className="player__title" title={current.title}>
                 {titleUrl ? <Link to={titleUrl}>{current.title}</Link> : current.title}
               </span>
-              {resume.notice?.trackId === current.id ? (
+              {!remote && resume.notice?.trackId === current.id ? (
                 <span className="player__resumed" role="status">
                   Resumed at {formatTime(resume.notice.seconds)} ·{" "}
                   <button className="link-button" type="button" onClick={resume.startOver}>
@@ -242,7 +251,7 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
             type="button"
             aria-label={`Playback speed: ${speed}×`}
             title="Playback speed (podcasts and audiobooks)"
-            disabled={!preferences}
+            disabled={!speedReady}
             onClick={nextSpeed}
           >
             {speed}×
@@ -259,16 +268,19 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
         >
           <LyricsIcon />
         </button>
-        <button
-          className={`icon-button player__visualizer-toggle${miniVisualizer ? " icon-button--active" : ""}`}
-          type="button"
-          aria-label="Visualizer in the player bar"
-          aria-pressed={miniVisualizer}
-          title={miniVisualizer ? "Visualizer: on" : "Visualizer: off"}
-          onClick={toggleVisualizer}
-        >
-          <VisualizerIcon />
-        </button>
+        {/* Remote mode: nothing plays here to show. */}
+        {!remote && (
+          <button
+            className={`icon-button player__visualizer-toggle${miniVisualizer ? " icon-button--active" : ""}`}
+            type="button"
+            aria-label="Visualizer in the player bar"
+            aria-pressed={miniVisualizer}
+            title={miniVisualizer ? "Visualizer: on" : "Visualizer: off"}
+            onClick={toggleVisualizer}
+          >
+            <VisualizerIcon />
+          </button>
+        )}
         <button
           className={`icon-button player__queue${queueOpen ? " icon-button--active" : ""}`}
           type="button"
@@ -279,7 +291,7 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
         >
           <QueueIcon />
         </button>
-        {!state.spoken && (
+        {!state.spoken && !serverPlayer && (
           <button
             className={`icon-button player__crossfade${state.crossfade ? " icon-button--active" : ""}`}
             type="button"
@@ -298,33 +310,75 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
         <PlayerMenu
           miniVisualizer={miniVisualizer}
           onToggleVisualizer={toggleVisualizer}
-          speed={preferences ? speed : null}
+          speed={speedReady ? speed : null}
           onSpeed={setSpeed}
           onSkip={skip}
+          serverPlayer={serverPlayer}
         />
-        <div className="player__volume">
-          <button
-            className="icon-button"
-            type="button"
-            aria-label={state.muted ? "Unmute" : "Mute"}
-            onClick={() => engine.toggleMute()}
-          >
-            <VolumeIcon muted={state.muted || state.volume === 0} />
-          </button>
-          <input
-            className="slider"
-            type="range"
-            aria-label="Volume"
-            min={0}
-            max={1}
-            step={0.01}
-            value={state.muted ? 0 : state.volume}
-            onChange={(e) => engine.setVolume(Number(e.target.value))}
-          />
-        </div>
+        {!serverPlayer && (
+          <div className="player__volume">
+            <button
+              className="icon-button"
+              type="button"
+              aria-label={state.muted ? "Unmute" : "Mute"}
+              onClick={() => engine.toggleMute()}
+            >
+              <VolumeIcon muted={state.muted || state.volume === 0} />
+            </button>
+            <input
+              className="slider"
+              type="range"
+              aria-label="Volume"
+              min={0}
+              max={1}
+              step={0.01}
+              value={state.muted ? 0 : state.volume}
+              onChange={(e) => engine.setVolume(Number(e.target.value))}
+            />
+          </div>
+        )}
       </div>
     </footer>
   );
+}
+
+/**
+ * Above the title: where it plays (remote mode, with a way back), whether this tab can be
+ * controlled, or why remote mode ended.
+ */
+function PlayerWhere() {
+  const { remote } = usePlayer();
+  const controllable = useRemoteTarget();
+  const notice = useModeNotice();
+  if (remote) {
+    return (
+      <span className="player__where" role="status" title={notice ?? undefined}>
+        Playing on <strong>{remote.name}</strong> ·{" "}
+        <button className="link-button" type="button" onClick={() => playHere()}>
+          Play here
+        </button>
+        {notice && <span className="player__where-notice"> · {notice}</span>}
+      </span>
+    );
+  }
+  if (notice) {
+    return (
+      <span className="player__where player__where--notice" role="status">
+        {notice} ·{" "}
+        <button className="link-button" type="button" onClick={dismissModeNotice}>
+          OK
+        </button>
+      </span>
+    );
+  }
+  if (controllable.kind === "on") {
+    return (
+      <span className="player__where player__where--controllable" title="Your other devices can control this tab (Remote, in the queue)">
+        Remote control on
+      </span>
+    );
+  }
+  return null;
 }
 
 /**
@@ -337,14 +391,17 @@ function PlayerMenu({
   speed,
   onSpeed,
   onSkip,
+  serverPlayer,
 }: {
   miniVisualizer: boolean;
   onToggleVisualizer(): void;
   speed: number | null; // null: preferences not loaded yet
   onSpeed(speed: number): void;
   onSkip(seconds: number): void;
+  serverPlayer: boolean; // no volume, no crossfade
 }) {
-  const { state, engine } = usePlayer();
+  const { state, engine, remote } = usePlayer();
+  const nowPlaying = useNowPlaying();
 
   const item = (label: string, active: boolean, onClick: () => void, icon: JSX.Element) => (
     <button
@@ -373,12 +430,13 @@ function PlayerMenu({
             <>
               {item(state.shuffle ? "Shuffle: on" : "Shuffle: off", state.shuffle, () => engine.toggleShuffle(), <ShuffleIcon />)}
               {item(REPEAT_LABELS[state.repeat], state.repeat !== "off", () => engine.cycleRepeat(), <RepeatIcon one={state.repeat === "one"} />)}
-              {item(
-                state.crossfade ? `Crossfade: ${state.crossfadeSeconds} s` : "Crossfade: off",
-                state.crossfade,
-                () => engine.toggleCrossfade(),
-                <CrossfadeIcon />,
-              )}
+              {!serverPlayer &&
+                item(
+                  state.crossfade ? `Crossfade: ${state.crossfadeSeconds} s` : "Crossfade: off",
+                  state.crossfade,
+                  () => engine.toggleCrossfade(),
+                  <CrossfadeIcon />,
+                )}
             </>
           )}
           {/* Audiobooks and podcasts: what phones have no room for in the bar. */}
@@ -410,20 +468,24 @@ function PlayerMenu({
               )}
             </>
           )}
-          {item(miniVisualizer ? "Visualizer: on" : "Visualizer: off", miniVisualizer, onToggleVisualizer, <VisualizerIcon />)}
-          <label className="player-menu__volume">
-            <VolumeIcon muted={state.muted || state.volume === 0} />
-            <input
-              className="slider"
-              type="range"
-              aria-label="Volume"
-              min={0}
-              max={1}
-              step={0.01}
-              value={state.muted ? 0 : state.volume}
-              onChange={(e) => engine.setVolume(Number(e.target.value))}
-            />
-          </label>
+          {state.current && item("Now playing: lyrics", nowPlaying.open, nowPlaying.toggle, <LyricsIcon />)}
+          {!remote &&
+            item(miniVisualizer ? "Visualizer: on" : "Visualizer: off", miniVisualizer, onToggleVisualizer, <VisualizerIcon />)}
+          {!serverPlayer && (
+            <label className="player-menu__volume">
+              <VolumeIcon muted={state.muted || state.volume === 0} />
+              <input
+                className="slider"
+                type="range"
+                aria-label="Volume"
+                min={0}
+                max={1}
+                step={0.01}
+                value={state.muted ? 0 : state.volume}
+                onChange={(e) => engine.setVolume(Number(e.target.value))}
+              />
+            </label>
+          )}
         </>
       )}
     </Dropdown>

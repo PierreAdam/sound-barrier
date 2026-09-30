@@ -7,6 +7,7 @@
 // (the settings stay as they are for the music), and "previous" / "next" move by the
 // chapters inside the file when it has some.
 
+import type { PlayerController } from "./controller";
 import { nextIndex, nextRepeatMode, previousIndex, type RepeatMode, shuffleEntries } from "./queue";
 
 export interface Track {
@@ -86,6 +87,8 @@ export interface PlayerSnapshot {
   positioned: boolean;
   /** Audiobooks and podcasts: pause when the current chapter (or file) ends, once. */
   pauseAtEnd: boolean;
+  /** Playback speed of audiobooks and podcasts (music always plays at 1x). */
+  speed: number;
 }
 
 /** The queue as saved on the server (see useWebQueue). */
@@ -137,7 +140,7 @@ const STOP_TIMER_SECONDS = 1.5;
 const UNDO_LEVELS = 20;
 const DECK_EVENTS = ["timeupdate", "durationchange", "play", "pause", "ended", "error"] as const;
 
-export class PlayerEngine {
+export class PlayerEngine implements PlayerController {
   private readonly options: EngineOptions;
   private readonly decks: [AudioLike, AudioLike];
   private readonly detach: (() => void)[] = [];
@@ -758,6 +761,7 @@ export class PlayerEngine {
       chapter,
       positioned: entry !== undefined && entry.key === this.positionedKey,
       pauseAtEnd: this.pauseAtEnd,
+      speed: this.spokenSpeed,
     };
   }
 

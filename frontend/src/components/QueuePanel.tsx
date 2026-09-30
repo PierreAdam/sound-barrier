@@ -3,10 +3,9 @@ import { Link } from "react-router-dom";
 
 import { formatTime, formatSize, plural } from "../format";
 import { usePlayer } from "../player/PlayerContext";
-import { RemoteToggle } from "../remote/RemoteToggle";
 import { AddToPlaylist } from "./AddToPlaylist";
 import { PlayIcon, RemoveIcon, ShuffleIcon, TrashIcon, UndoIcon } from "./Icons";
-import { PlayerSwitch } from "./PlayerSwitch";
+import { PlaybackMenu } from "./PlaybackMenu";
 
 interface DragState {
   from: number;
@@ -74,7 +73,7 @@ export function QueuePanel({ open, onClose }: { open: boolean; onClose(): void }
     <section className={`queue${open ? " queue--open" : ""}`} aria-label="Queue" inert={!open}>
       <header className="queue__header">
         <h2 className="queue__title">Queue</h2>
-        <PlayerSwitch open={open} onNavigate={onClose} />
+        <PlaybackMenu open={open} onNavigate={onClose} />
         <nav className="action-bar" aria-label="Queue actions">
           <button className="action-bar__item" type="button" onClick={() => engine.clear()} disabled={!queue.length}>
             <TrashIcon />
@@ -106,7 +105,6 @@ export function QueuePanel({ open, onClose }: { open: boolean; onClose(): void }
             Remove selected
           </button>
           <AddToPlaylist songIds={queue.map((t) => t.id)} label="Save as playlist" />
-          <RemoteToggle />
         </nav>
         <span className="queue__summary">
           {plural(queue.length, "track")} • {formatTime(totalSeconds)}

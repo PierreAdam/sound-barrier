@@ -10,13 +10,23 @@ Only one tab at a time can be the target of a given player (see api/players.py: 
 Shared one, or one the user created): another asking is told, and may take over (the
 first one is then told it was replaced).
 
+A remote does not only show a target: it mirrors it (the web UI in "remote" mode shows
+the target's queue in its own player bar and queue panel, and what the user plays or
+queues goes to the target). So a target also sends its queue, when it changes, to the
+remotes watching it (a queue can be large: it is not sent to every remote listing targets).
+
 Messages are JSON objects with a "type":
 - target -> hub: "target" {player, playerName, device, takeOver}, "state" {state},
-  "stop" (no longer controllable);
-- remote -> hub: "remote" (list the targets), "command" {target, command};
+  "queue" {queue} (its entries: {revision, keys, tracks}), "stop" (no longer controllable);
+- remote -> hub: "remote" (list the targets), "watch" {target} (get that target's queue,
+  null: none), "command" {target, command};
 - hub -> target: "target-on" {id}, "conflict" {device}, "replaced" {device},
   "command" {command};
-- hub -> remote: "targets" {targets}, "state" {target, state}, "error" {message}.
+- hub -> remote: "targets" {targets}, "state" {target, state}, "queue" {target, queue}
+  (watchers only), "error" {message}.
+
+Targets are web UI tabs ("browser"), or server players ("server",
+services/server_player.py): members without a WebSocket, whose `send` applies commands.
 """
 
 import logging
@@ -44,8 +54,20 @@ COMMANDS = frozenset(
         "crossfade",  # toggle
         "pauseAtEnd",  # toggle
         "speed",  # {value}: audiobooks and podcasts
+        "crossfadeSeconds",  # {value}
+        # The queue. Entries are named by their key (the target's, stable while it is
+        # queued: the same song may be queued twice), never by position, which moves.
+        "playQueue",  # {tracks, index, startAt?}: replaces the queue
+        "add",  # {tracks}: at the end
+        "playNext",  # {tracks}: after the current one
+        "playAt",  # {key}
+        "remove",  # {keys}
+        "move",  # {key, before}: before the entry `before` (null: at the end)
+        "clear",
+        "undo",
     }
 )
+KINDS = frozenset({"browser", "server"})
 MAX_TEXT = 200  # player names, device names
 
 Send = Callable[[dict[str, Any]], Awaitable[None]]
@@ -62,7 +84,10 @@ class Member:
     player: str | None = None  # target: the player it plays (None: Shared)
     player_name: str = ""
     device: str = ""
+    kind: str = "browser"  # of a target: a web UI tab, or a server player
     state: dict[str, Any] | None = None  # target: its last reported state
+    queue: dict[str, Any] | None = None  # target: its last reported queue
+    watching: str | None = None  # remote: the target whose queue it gets
 
 
 def as_object(value: object) -> dict[str, Any] | None:
@@ -78,8 +103,8 @@ class RemoteHub:
     def __init__(self) -> None:
         self._members: dict[uuid.UUID, list[Member]] = {}
 
-    def join(self, user_id: uuid.UUID, send: Send) -> Member:
-        member = Member(user_id, send)
+    def join(self, user_id: uuid.UUID, send: Send, *, kind: str = "browser") -> Member:
+        member = Member(user_id, send, kind=kind if kind in KINDS else "browser")
         self._members.setdefault(user_id, []).append(member)
         return member
 
@@ -103,13 +128,25 @@ class RemoteHub:
                 await self._to_remotes(
                     member.user_id, {"type": "state", "target": member.id, "state": state}
                 )
+        elif kind == "queue" and member.role == "target":
+            queue = as_object(message.get("queue"))
+            if queue is not None:
+                member.queue = queue
+                await self._to_watchers(member, queue)
         elif kind == "stop" and member.role == "target":
             member.role = None
             member.state = None
+            member.queue = None
             await self._announce(member.user_id)
         elif kind == "remote":
             member.role = "remote"
             await self._send(member, self._targets_message(member.user_id))
+        elif kind == "watch" and member.role == "remote":
+            watched = message.get("target")
+            member.watching = watched if isinstance(watched, str) else None
+            target = self._find(member.user_id, member.watching)
+            if target is not None and target.queue is not None:
+                await self._send(member, self._queue_message(target, target.queue))
         elif kind == "command" and member.role == "remote":
             await self._command(member, message)
 
@@ -117,6 +154,9 @@ class RemoteHub:
 
     def _of(self, user_id: uuid.UUID, role: str) -> list[Member]:
         return [m for m in self._members.get(user_id, []) if m.role == role]
+
+    def _find(self, user_id: uuid.UUID, target_id: object) -> Member | None:
+        return next((t for t in self._of(user_id, "target") if t.id == target_id), None)
 
     async def _target(self, member: Member, message: dict[str, Any]) -> None:
         player = message.get("player")
@@ -137,12 +177,14 @@ class RemoteHub:
                 was_target = member.role == "target"
                 member.role = None
                 member.state = None
+                member.queue = None
                 await self._send(member, {"type": "conflict", "device": other.device})
                 if was_target:
                     await self._announce(member.user_id)
                 return
             other.role = None
             other.state = None
+            other.queue = None
             await self._send(other, {"type": "replaced", "device": member.device})
         member.role = "target"
         member.player = player
@@ -151,10 +193,7 @@ class RemoteHub:
 
     async def _command(self, member: Member, message: dict[str, Any]) -> None:
         command = as_object(message.get("command"))
-        target = next(
-            (t for t in self._of(member.user_id, "target") if t.id == message.get("target")),
-            None,
-        )
+        target = self._find(member.user_id, message.get("target"))
         if target is None:
             await self._send(
                 member, {"type": "error", "message": "This player can no longer be controlled"}
@@ -172,6 +211,7 @@ class RemoteHub:
                     "id": t.id,
                     "playerName": t.player_name,
                     "device": t.device,
+                    "kind": t.kind,
                     "state": t.state,
                 }
                 for t in self._of(user_id, "target")
@@ -181,6 +221,15 @@ class RemoteHub:
     async def _announce(self, user_id: uuid.UUID) -> None:
         """The user's remotes: the targets changed."""
         await self._to_remotes(user_id, self._targets_message(user_id))
+
+    def _queue_message(self, target: Member, queue: dict[str, Any]) -> dict[str, Any]:
+        return {"type": "queue", "target": target.id, "queue": queue}
+
+    async def _to_watchers(self, target: Member, queue: dict[str, Any]) -> None:
+        message = self._queue_message(target, queue)
+        for remote in self._of(target.user_id, "remote"):
+            if remote.watching == target.id:
+                await self._send(remote, message)
 
     async def _to_remotes(self, user_id: uuid.UUID, message: dict[str, Any]) -> None:
         for remote in self._of(user_id, "remote"):

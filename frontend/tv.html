@@ -1,0 +1,36 @@
+<!doctype html>
+<!--
+  This browser's player on a TV (src/cast/tv): the tab that opens this page hands it its
+  queue and drives it in remote mode; this page plays it (its own player engine) and shows
+  Now playing. Opened by Chrome's Presentation API (rendered out of sight, mirrored to a
+  Chromecast) or in a window (a TV plugged in). The same look as the server player's
+  receiver (public/cast/screen.css).
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sound-Barrier · TV</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/cast/screen.css" />
+  </head>
+  <body>
+    <img class="backdrop" id="backdrop" alt="" hidden />
+    <div class="idle" id="idle">Sound-Barrier</div>
+    <main class="screen" id="screen" hidden>
+      <img class="cover" id="cover" alt="" />
+      <div class="side">
+        <span class="paused" id="paused" hidden>Paused</span>
+        <h1 class="title" id="title"></h1>
+        <p class="artist" id="artist"></p>
+        <div class="progress">
+          <span id="elapsed">0:00</span>
+          <div class="bar"><span id="bar"></span></div>
+          <span id="duration">0:00</span>
+        </div>
+        <div class="lyrics" id="lyrics" hidden><ol id="lines"></ol></div>
+      </div>
+    </main>
+    <script type="module" src="/src/cast/tv/main.ts"></script>
+  </body>
+</html>

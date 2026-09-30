@@ -8,7 +8,7 @@ import { usePlayer } from "../player/PlayerContext";
  * while playing (and browsers pause animation frames in hidden tabs).
  */
 export function Visualizer({ className = "", bars = 48 }: { className?: string; bars?: number }) {
-  const { engine, state } = usePlayer();
+  const { engine, state, remote } = usePlayer();
   const canvas = useRef<HTMLCanvasElement>(null);
   const playing = state.playing;
 
@@ -50,5 +50,7 @@ export function Visualizer({ className = "", bars = 48 }: { className?: string; 
     return () => cancelAnimationFrame(frame);
   }, [engine, bars, playing]);
 
+  // Remote mode: nothing plays in this tab to show.
+  if (remote) return null;
   return <canvas ref={canvas} className={`visualizer ${className}`.trim()} aria-hidden />;
 }

@@ -1,0 +1,43 @@
+<!doctype html>
+<!--
+  Sound-Barrier's Google Cast receiver: the server player's "Now playing" screen on a TV.
+  The TV plays the stream; this page follows the server player (`/api/stream/<key>/now`,
+  the cover, the lyrics) and shows what the TV plays, which is a little behind the server
+  (its buffer: see receiver.js).
+
+  A static page: it can be hosted anywhere (it learns the server and the key from the
+  stream URL). Opened by our own Cast app (registered with the page's URL, its id in
+  Settings → External services), by DashCast (`?stream=…&autoplay=1`), or mirrored by Chrome.
+
+  Chromecasts have little power: nothing here costs much to draw (no live blur, no mask,
+  no animation but the lyrics' scroll, on its own layer). Google's receiver framework is
+  only loaded when the page is our Cast app (not for DashCast or Chrome's mirroring).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sound-Barrier</title>
+    <link rel="stylesheet" href="screen.css" />
+  </head>
+  <body>
+    <audio id="audio" hidden></audio>
+    <img class="backdrop" id="backdrop" alt="" hidden />
+    <div class="idle" id="idle">Sound-Barrier</div>
+    <main class="screen" id="screen" hidden>
+      <img class="cover" id="cover" alt="" />
+      <div class="side">
+        <span class="paused" id="paused" hidden>Paused</span>
+        <h1 class="title" id="title"></h1>
+        <p class="artist" id="artist"></p>
+        <div class="progress">
+          <span id="elapsed">0:00</span>
+          <div class="bar"><span id="bar"></span></div>
+          <span id="duration">0:00</span>
+        </div>
+        <div class="lyrics" id="lyrics" hidden><ol id="lines"></ol></div>
+      </div>
+    </main>
+    <script src="receiver.js"></script>
+  </body>
+</html>

@@ -19,6 +19,7 @@ from app.services.maintenance import LibraryRoot, Maintenance
 from app.services.new_releases import DiscographySync
 from app.services.remote import RemoteHub
 from app.services.scans import ScanManager
+from app.services.server_player import ServerPlayers
 from app.subsonic import build_router
 from app.web import mount_web
 
@@ -66,6 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # The About page's library list and ffmpeg version, ready before anyone asks.
         warm_up = asyncio.create_task(about.warm_up(), name="about-warm-up")
         yield
+        await app.state.server_players.close()
         warm_up.cancel()
         if scheduler is not None:
             scheduler.cancel()
@@ -80,7 +82,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Sound-Barrier", version=__version__, lifespan=lifespan)
     app.state.settings = settings
     app.state.cipher = PasswordCipher(settings.require_secret_key())
-    app.state.remote = RemoteHub()  # remote control (in memory: one server process)
+    app.state.remote = hub = RemoteHub()  # remote control (in memory: one server process)
+    app.state.server_players = ServerPlayers(hub)  # targets of that hub, in memory too
     app.state.throttle = LoginThrottle(
         settings.login_max_failures,
         window_seconds=settings.login_block_minutes * 60,

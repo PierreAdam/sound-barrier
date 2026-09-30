@@ -41,7 +41,7 @@ export function AppShell() {
                 </main>
               </div>
               <NowPlaying />
-              <PlayerDock />
+              <PlayerDock panelOpen={panelOpen} onQueueOpen={() => setPanelOpen(false)} />
             </div>
             <DisplayDiagnostics />
           </NowPlayingProvider>

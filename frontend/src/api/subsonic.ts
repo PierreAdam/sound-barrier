@@ -61,6 +61,11 @@ export class SubsonicClient {
     return this.credentials.username;
   }
 
+  /** For this user's TV page (cast/tv/channel.ts), opened by this browser: the same client. */
+  get sharedCredentials(): Credentials {
+    return { ...this.credentials };
+  }
+
   /** URL of a method, e.g. for `<audio src>` (stream) or `<img src>` (getCoverArt). */
   url(method: string, params: Params = {}): string {
     return `${this.baseUrl}/${method}?${this.query(params).toString()}`;

@@ -38,31 +38,46 @@ export function Dropdown({
   const location = useLocation();
 
   // Placed once shown (its size is known then), before the browser paints it. Hidden
-  // until then: never seen at a wrong place.
+  // until then: never seen at a wrong place. Placed again when its content changes (it
+  // may grow: a list arriving, a section opened), so it stays inside the window.
   useLayoutEffect(() => {
     if (!open || !fixed) {
       setPlace(undefined);
       return;
     }
-    const button = trigger.current?.getBoundingClientRect();
     const menu = panel.current;
-    if (!button || !menu) return;
-    const width = menu.offsetWidth;
-    const height = menu.scrollHeight;
-    const below = window.innerHeight - button.bottom - GAP - MARGIN;
-    const above = button.top - GAP - MARGIN;
-    const downward = height <= below || below >= above;
-    const room = downward ? below : above;
-    const shown = Math.min(height, room);
-    setPlace({
-      position: "fixed",
-      top: downward ? button.bottom + GAP : button.top - GAP - shown,
-      bottom: "auto",
-      left: Math.max(MARGIN, Math.min(button.left, window.innerWidth - width - MARGIN)),
-      right: "auto",
-      maxHeight: room,
-      overflowY: "auto",
+    if (!menu) return;
+    let last = "";
+    const position = () => {
+      const button = trigger.current?.getBoundingClientRect();
+      if (!button) return;
+      const width = menu.offsetWidth;
+      const height = menu.scrollHeight;
+      const below = window.innerHeight - button.bottom - GAP - MARGIN;
+      const above = button.top - GAP - MARGIN;
+      const downward = height <= below || below >= above;
+      // Anchored on the button's side: growing, it goes away from it, never off the window.
+      const next: CSSProperties = {
+        position: "fixed",
+        top: downward ? button.bottom + GAP : "auto",
+        bottom: downward ? "auto" : window.innerHeight - button.top + GAP,
+        left: Math.max(MARGIN, Math.min(button.left, window.innerWidth - width - MARGIN)),
+        right: "auto",
+        maxHeight: downward ? below : above,
+        overflowY: "auto",
+      };
+      const key = JSON.stringify(next);
+      if (key === last) return;
+      last = key;
+      setPlace(next);
+    };
+    position();
+    // Its content, not its own style (which this sets).
+    const observer = new MutationObserver((changes) => {
+      if (changes.some((change) => change.target !== menu)) position();
     });
+    observer.observe(menu, { childList: true, subtree: true, characterData: true, attributes: true });
+    return () => observer.disconnect();
   }, [open, fixed]);
 
   function toggle() {

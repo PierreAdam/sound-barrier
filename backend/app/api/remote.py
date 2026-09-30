@@ -16,7 +16,7 @@ from app.services.remote import RemoteHub, as_object
 
 router = APIRouter(prefix="/remote", tags=["remote"])
 
-MAX_MESSAGE = 64 * 1024  # a state or a command is far smaller
+MAX_MESSAGE = 4 * 1024 * 1024  # a queue of 5000 tracks (a state or a command: far smaller)
 
 
 def _same_origin(websocket: WebSocket) -> bool:

@@ -155,6 +155,10 @@ export interface SubsonicPayloads {
   deleteBookmark: object;
   getScanStatus: { scanStatus: ScanStatus };
   startScan: { scanStatus: ScanStatus };
+  // OpenSubsonic "songLyrics": `start` in ms on synced lines.
+  getLyricsBySongId: {
+    lyricsList: { structuredLyrics?: { synced: boolean; line?: { start?: number; value: string }[] }[] };
+  };
 }
 
 export type SubsonicMethod = keyof SubsonicPayloads;

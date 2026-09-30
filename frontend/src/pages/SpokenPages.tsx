@@ -10,6 +10,7 @@ import {
 } from "../api/native";
 import type { Child } from "../api/types";
 import { useSession } from "../auth/AuthContext";
+import { Breadcrumb, type Crumb } from "../components/Breadcrumb";
 import { CoverArt } from "../components/CoverArt";
 import { PlayIcon } from "../components/Icons";
 import { formatDuration, formatTime, plural } from "../format";
@@ -19,6 +20,18 @@ const TITLES: Record<SpokenKind, string> = { podcasts: "Podcasts", audiobooks: "
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const showUrl = (show: SpokenShow) => `/${show.kind}/${show.id}`;
 const seriesUrl = (series: string) => `/audiobooks/series/${encodeURIComponent(series)}`;
+
+/** Where a book / show is: its section, its series (a book in one), then itself. */
+export function spokenCrumbs(
+  kind: SpokenKind,
+  show: { id: string; title: string; series?: string | null },
+  current = true, // the page of the show itself (else: a page under it, e.g. its details)
+): Crumb[] {
+  const crumbs: Crumb[] = [{ label: TITLES[kind], to: `/${kind}` }];
+  if (kind === "audiobooks" && show.series) crumbs.push({ label: show.series, to: seriesUrl(show.series) });
+  crumbs.push(current ? { label: show.title } : { label: show.title, to: `/${kind}/${show.id}` });
+  return crumbs;
+}
 
 /** A series' books in reading order: by number (1, 1.5, 2...), then title. */
 function inSeriesOrder(books: SpokenShow[]): SpokenShow[] {
@@ -327,12 +340,7 @@ export function SpokenSeriesPage() {
   const total = books.reduce((sum, b) => sum + b.durationMs, 0) / 1000;
   return (
     <div className="page spoken">
-      <p className="text-muted">
-        <Link className="link" to="/audiobooks">
-          Audiobooks
-        </Link>{" "}
-        · Series
-      </p>
+      <Breadcrumb items={[{ label: TITLES.audiobooks, to: "/audiobooks" }, { label: books[0]?.series ?? series }]} />
       <h1 className="page__title">{books[0]?.series ?? series}</h1>
       <p className="text-muted">
         {authors} · {plural(books.length, "book")} · {formatDuration(total)}
@@ -398,6 +406,7 @@ export function SpokenShowPage({ kind }: { kind: SpokenKind }) {
 
   return (
     <div className="page spoken">
+      <Breadcrumb items={spokenCrumbs(kind, show)} />
       <header className="spoken__header">
         <CoverArt id={show.coverArt ?? undefined} size={220} className="spoken__cover" alt="" />
         <div className="spoken__header-text">
