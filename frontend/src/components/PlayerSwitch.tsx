@@ -13,7 +13,7 @@ export const SWITCH_HINT =
   "and brings the other player's queue here (queues are not moved from one player to another).";
 
 /** Queue panel: the player this browser plays, and a menu to switch to another of the user's. */
-export function PlayerSwitch({ open }: { open: boolean }) {
+export function PlayerSwitch({ open, onNavigate }: { open: boolean; onNavigate(): void }) {
   const { username } = useSession().user;
   const playerId = useWebPlayerId(username);
   const [players, setPlayers] = useState<WebPlayer[] | null>(null);
@@ -85,7 +85,10 @@ export function PlayerSwitch({ open }: { open: boolean }) {
             className="dropdown__item dropdown__item--separated"
             role="menuitem"
             to="/account#players"
-            onClick={close}
+            onClick={() => {
+              close();
+              onNavigate(); // closes the queue: the section may be behind it
+            }}
           >
             {players?.length === 0 ? "Create a player…" : "Manage players…"}
           </Link>

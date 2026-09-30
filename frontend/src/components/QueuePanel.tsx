@@ -74,7 +74,7 @@ export function QueuePanel({ open, onClose }: { open: boolean; onClose(): void }
     <section className={`queue${open ? " queue--open" : ""}`} aria-label="Queue" inert={!open}>
       <header className="queue__header">
         <h2 className="queue__title">Queue</h2>
-        <PlayerSwitch open={open} />
+        <PlayerSwitch open={open} onNavigate={onClose} />
         <nav className="action-bar" aria-label="Queue actions">
           <button className="action-bar__item" type="button" onClick={() => engine.clear()} disabled={!queue.length}>
             <TrashIcon />

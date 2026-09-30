@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 import { PlayerBar } from "./PlayerBar";
 import { QueuePanel } from "./QueuePanel";
@@ -6,6 +7,10 @@ import { QueuePanel } from "./QueuePanel";
 /** Delays before hovering the player opens / leaving closes the queue (avoids flicker). */
 const OPEN_DELAY_MS = 300;
 const CLOSE_DELAY_MS = 350;
+
+// On phones the queue covers the whole screen between the bars (theme.less,
+// @breakpoint-narrow): a page opened from it would be behind it.
+const FULL_SCREEN_QUEUE = "(max-width: 760px)";
 
 function canHover(): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia("(hover: hover)").matches;
@@ -20,6 +25,7 @@ export function PlayerDock() {
   const [pinned, setPinned] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const open = pinned || hovered;
+  const location = useLocation();
 
   function hoverAfter(value: boolean, delay: number) {
     if (!canHover()) return;
@@ -41,6 +47,12 @@ export function PlayerDock() {
   }, [open]);
 
   useEffect(() => () => clearTimeout(timer.current), []);
+
+  // Going to another page (a link in the queue: an album, "Manage players"...) on a phone:
+  // the queue closes, the page shows.
+  useEffect(() => {
+    if (typeof window.matchMedia === "function" && window.matchMedia(FULL_SCREEN_QUEUE).matches) close();
+  }, [location.pathname, location.hash]);
 
   return (
     <div
