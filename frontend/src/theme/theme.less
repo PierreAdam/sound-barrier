@@ -2737,6 +2737,66 @@ select.field__input {
   }
 }
 
+// A small turning ring, in the accent color: something is being loaded.
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border: 2px solid color-mix(in srgb, @color-accent 25%, transparent);
+  border-top-color: @color-accent;
+  border-radius: @radius-round;
+  animation: spin 800ms linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// About page: runtime and libraries, below the versions.
+.about-loading {
+  display: flex;
+  align-items: center;
+  gap: @space-2;
+  margin-top: @space-5;
+}
+
+.about-section {
+  display: flex;
+  flex-direction: column;
+  gap: @space-3;
+  margin-top: @space-5;
+
+  &__title {
+    font-size: @font-size-lg;
+  }
+
+  &__subtitle {
+    margin-top: @space-2;
+    font-size: @font-size-base;
+  }
+}
+
+.about-libraries {
+  max-width: 900px;
+  font-size: @font-size-sm;
+
+  &__version {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  &__direct {
+    margin-left: @space-2;
+  }
+}
+
 .about {
   display: grid;
   grid-template-columns: max-content 1fr;

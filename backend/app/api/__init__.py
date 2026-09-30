@@ -4,6 +4,7 @@
 from fastapi import APIRouter
 
 from app.api import (
+    about,
     auth,
     covers,
     discography,
@@ -23,6 +24,7 @@ from app.api import (
 
 def build_router() -> APIRouter:
     router = APIRouter()
+    router.include_router(about.router)
     router.include_router(auth.router)
     router.include_router(library.router)
     router.include_router(lyrics.router)

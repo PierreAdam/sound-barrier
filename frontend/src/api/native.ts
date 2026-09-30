@@ -526,6 +526,32 @@ export interface PluginLinks {
 
 // --- lyrics -------------------------------------------------------------------
 
+/** A library the server runs on (About page). */
+export interface ServerLibrary {
+  name: string;
+  version: string;
+  license: string | null;
+  summary: string | null;
+  url: string | null;
+  direct: boolean; // declared by Sound-Barrier (else needed by another library)
+}
+
+/** What the server runs on (admins only). */
+export interface ServerRuntime {
+  version: string;
+  python: string;
+  os: string;
+  kernel: string;
+  architecture: string;
+  container: boolean;
+  cpus: number | null;
+  postgres: string | null;
+  ffmpeg: string | null;
+  timeZone: string;
+  startedAt: string;
+  uptimeS: number;
+}
+
 export interface SongLyrics {
   found: boolean;
   unavailable: boolean; // LRCLIB could not be asked: try again later
@@ -744,6 +770,8 @@ export const api = {
     request<PluginLinks[]>("GET", `/artists/${artistId}/discography/${mbid}/links`),
 
   getSongLyrics: (songId: string) => request<SongLyrics>("GET", `/songs/${songId}/lyrics`),
+  /** The server's libraries; its runtime for admins (else null). */
+  getAbout: () => request<{ libraries: ServerLibrary[]; runtime: ServerRuntime | null }>("GET", "/about"),
 
   getAlbumTags: (albumId: string) => request<AlbumTags>("GET", `/albums/${albumId}/tags`),
   setAlbumTags: (albumId: string, tags: AlbumTags) =>

@@ -14,7 +14,7 @@ from app.core.throttle import LoginThrottle
 from app.external import create_client
 from app.library_manager import get_tagger
 from app.library_manager.imports import ImportManager
-from app.services import first_start, users
+from app.services import about, first_start, users
 from app.services.maintenance import LibraryRoot, Maintenance
 from app.services.new_releases import DiscographySync
 from app.services.scans import ScanManager
@@ -62,7 +62,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         scheduler = None
         if settings.scheduler:
             scheduler = asyncio.create_task(scans.run_scheduler(), name="scan-scheduler")
+        # The About page's library list and ffmpeg version, ready before anyone asks.
+        warm_up = asyncio.create_task(about.warm_up(), name="about-warm-up")
         yield
+        warm_up.cancel()
         if scheduler is not None:
             scheduler.cancel()
         if cleanups is not None:
