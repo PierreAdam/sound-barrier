@@ -135,6 +135,9 @@ function UserMenu() {
             <Link className="dropdown__item" role="menuitem" to="/account" onClick={close}>
               My account
             </Link>
+            <Link className="dropdown__item" role="menuitem" to="/remote" onClick={close}>
+              Remote control
+            </Link>
             {user.adminRole && (
               <>
                 <Link className="dropdown__item" role="menuitem" to="/settings" onClick={close}>

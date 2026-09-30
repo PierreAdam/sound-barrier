@@ -17,6 +17,7 @@ from app.library_manager.imports import ImportManager
 from app.services import about, first_start, users
 from app.services.maintenance import LibraryRoot, Maintenance
 from app.services.new_releases import DiscographySync
+from app.services.remote import RemoteHub
 from app.services.scans import ScanManager
 from app.subsonic import build_router
 from app.web import mount_web
@@ -79,6 +80,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Sound-Barrier", version=__version__, lifespan=lifespan)
     app.state.settings = settings
     app.state.cipher = PasswordCipher(settings.require_secret_key())
+    app.state.remote = RemoteHub()  # remote control (in memory: one server process)
     app.state.throttle = LoginThrottle(
         settings.login_max_failures,
         window_seconds=settings.login_block_minutes * 60,

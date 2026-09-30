@@ -6,6 +6,7 @@ import { SectionsProvider } from "../api/useSections";
 import { useAuth } from "../auth/AuthContext";
 import { PlayerProvider } from "../player/PlayerContext";
 import { PreferencesProvider } from "../preferences/PreferencesContext";
+import { RemoteTargetBridge } from "../remote/RemoteTargetBridge";
 import { DisplayDiagnostics } from "./DisplayDiagnostics";
 import { NowPlaying, NowPlayingProvider } from "./NowPlaying";
 import { PlayerDock } from "./PlayerDock";
@@ -29,6 +30,7 @@ export function AppShell() {
         <PlayerProvider>
           <NowPlayingProvider>
             <LibraryWatcher />
+            <RemoteTargetBridge />
             <div className={`app${panelOpen ? " app--panel-open" : ""}`}>
               <TopBar onToggleMenu={() => setPanelOpen((open) => !open)} />
               <div className="app__body">

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { formatTime, formatSize, plural } from "../format";
 import { usePlayer } from "../player/PlayerContext";
+import { RemoteToggle } from "../remote/RemoteToggle";
 import { AddToPlaylist } from "./AddToPlaylist";
 import { PlayIcon, RemoveIcon, ShuffleIcon, TrashIcon, UndoIcon } from "./Icons";
 import { PlayerSwitch } from "./PlayerSwitch";
@@ -105,6 +106,7 @@ export function QueuePanel({ open, onClose }: { open: boolean; onClose(): void }
             Remove selected
           </button>
           <AddToPlaylist songIds={queue.map((t) => t.id)} label="Save as playlist" />
+          <RemoteToggle />
         </nav>
         <span className="queue__summary">
           {plural(queue.length, "track")} • {formatTime(totalSeconds)}

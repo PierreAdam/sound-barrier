@@ -41,6 +41,8 @@ export default defineConfig({
     // Same-origin requests in development: no CORS needed.
     proxy: {
       "/rest": backend,
+      // Remote control's WebSocket (before "/api": the first match wins).
+      "/api/remote/ws": { target: backend, ws: true },
       "/api": backend,
     },
   },

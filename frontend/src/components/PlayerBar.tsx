@@ -28,7 +28,7 @@ import {
 } from "./Icons";
 
 // Playback speeds of podcasts and audiobooks (the speed button cycles through them).
-const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
+export const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
 
 // The small visualizer of the player bar: per browser, like the volume.
 const MINI_VISUALIZER_KEY = "sb.player.visualizer";
@@ -41,10 +41,10 @@ function storedVisualizer(): boolean {
   }
 }
 
-const REPEAT_LABELS = { off: "Repeat: off", all: "Repeat: all", one: "Repeat: this track" } as const;
+export const REPEAT_LABELS = { off: "Repeat: off", all: "Repeat: all", one: "Repeat: this track" } as const;
 
 /** "Pause at end of chapter" (of episode for a podcast), for the current track. */
-function pauseAtEndLabel(track: Track | null): string {
+export function pauseAtEndLabel(track: Track | null): string {
   return track?.spokenKind === "podcasts" && !track.chapters ? "Pause at end of episode" : "Pause at end of chapter";
 }
 
