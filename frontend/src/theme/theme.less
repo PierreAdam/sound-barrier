@@ -3456,14 +3456,16 @@ select.field__input {
   pointer-events: none;
 }
 
+// As tall as its content (an empty queue: one row's height), up to @queue-height, then
+// its track list scrolls. Phones: the whole screen between the bars (below).
 .queue {
   position: absolute;
   right: 0;
   bottom: 0;
   left: 0;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  height: @queue-height;
+  display: flex;
+  flex-direction: column;
+  max-height: @queue-height;
   border-top: 1px solid @color-border;
   background: @color-surface;
   box-shadow: @shadow-panel;
@@ -3490,6 +3492,7 @@ select.field__input {
 
   &__header {
     display: flex;
+    flex: none;
     flex-wrap: wrap;
     align-items: center;
     gap: @space-4;
@@ -3509,6 +3512,8 @@ select.field__input {
   }
 
   &__body {
+    flex: 0 1 auto;
+    min-height: 0;
     overflow-y: auto;
     padding: 0 @space-3 @space-3;
   }
@@ -3520,8 +3525,9 @@ select.field__input {
     background: @color-surface;
   }
 
+  // The height of about one track row.
   &__empty {
-    padding: @space-5;
+    padding: @space-3 @space-2 0;
   }
 
   &__row {
@@ -3890,6 +3896,7 @@ select.field__input {
 
   .queue {
     height: 100%;
+    max-height: none;
   }
 
   .queue {
