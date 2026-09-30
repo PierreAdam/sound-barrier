@@ -20,7 +20,7 @@ function canHover(): boolean {
  * Player bar + queue panel. Like Subsonic, hovering the player opens the queue; the
  * queue button pins it open (and is the only way on touch screens).
  */
-export function PlayerDock() {
+export function PlayerDock({ panelOpen, onQueueOpen }: { panelOpen: boolean; onQueueOpen(): void }) {
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -47,6 +47,17 @@ export function PlayerDock() {
   }, [open]);
 
   useEffect(() => () => clearTimeout(timer.current), []);
+
+  // One or the other on phones: the side menu opening closes the queue (which would cover
+  // it), the queue opening closes the side menu.
+  useEffect(() => {
+    if (panelOpen) close();
+  }, [panelOpen]);
+  const queueOpened = useRef(onQueueOpen);
+  queueOpened.current = onQueueOpen;
+  useEffect(() => {
+    if (open) queueOpened.current();
+  }, [open]);
 
   // Going to another page (a link in the queue: an album, "Manage players"...) on a phone:
   // the queue closes, the page shows.

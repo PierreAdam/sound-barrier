@@ -5,7 +5,7 @@
 // graph is kept for the whole page life. Streams come from our own origin: the analyser
 // can read them (cross-origin audio would be silent once connected).
 
-import type { PlayerEngine } from "./engine";
+import type { PlayerController } from "./controller";
 
 interface Graph {
   context: AudioContext;
@@ -14,7 +14,7 @@ interface Graph {
 
 let graph: Graph | null = null;
 
-export function analyserFor(engine: PlayerEngine): AnalyserNode | null {
+export function analyserFor(engine: PlayerController): AnalyserNode | null {
   if (graph) {
     resumeAudio();
     return graph.analyser;

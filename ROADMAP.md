@@ -122,10 +122,21 @@ Decisions taken on what is left to do (2026-09-28). The design of what exists is
 9. ✅ **Players** (a queue per device): browsers play the Shared queue unless assigned to
    a player the user created (My account; switch from the queue panel), which keeps its
    own queue.
-10. ✅ **Remote control**: a tab made controllable (queue panel) is driven from another
-    tab, computer or phone ("Remote control" page): the player bar's controls, through a
-    WebSocket relayed by the server. Later: the target's queue on the remote (view,
-    add, remove, by track ids).
+10. ✅ **Remote control**, in the queue panel's one "Player" menu (with the choice of this
+    browser's player; explanations behind ⓘ): play here, let other devices control this
+    tab, or control another player. Remote mode: the player bar and the queue
+    mirror that player (dull accent bar), and what is played or queued while browsing goes
+    there (queue entries named by key). Replaces the "Remote control" page.
+11. ✅ **Server player**: plays on the server as an endless MP3 stream (ffmpeg), cast to a
+    Chromecast from the web UI or opened in VLC / a radio app; a remote control target like
+    a tab; "play even when nobody listens". Later: scrobbles and bookmarks of what it plays,
+    its stream key kept across restarts, several per user (tied to the Players).
+    The TV's Now playing screen (`frontend/public/cast/`) works today through DashCast
+    (a published receiver) or mirrored by Chrome from the computer. Later: our own Google
+    Cast app (Cast SDK Developer Console, $5 once, "Custom Receiver" with
+    `https://<server>/cast/receiver.html`, the Chromecast's serial as test device; its id in
+    Settings → External services), then published with the page hosted once (e.g. GitHub
+    Pages), so no third party is involved.
 
 ## Maybe later
 
@@ -141,9 +152,10 @@ Decisions taken on what is left to do (2026-09-28). The design of what exists is
 ## Not planned
 
 - **On-the-fly transcoding** (`stream?format=&maxBitRate=`): lossless files are converted
-  to MP3 at import time instead.
+  to MP3 at import time instead. (The server player's stream is encoded on the fly, by
+  exception: one stream per player, not per client.)
 - **Album download** (zip) in the web UI.
 - **Taking over the previous beets database** (`music.db`): Sound-Barrier maintains its
   own beets database (adopt library albums from Library Management → Library).
 - **Backups** of the database and secret key: handled on the server side.
-- Podcasts, internet radio, shares, jukebox, video.
+- Internet radio stations, podcast subscriptions (RSS), shares, jukebox, video.

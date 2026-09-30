@@ -377,6 +377,20 @@ export interface QueueToSave {
   positionMs: number;
 }
 
+/**
+ * The user's server player: it plays on the server, as a stream devices listen to
+ * (Chromecast, VLC...). Driven like any player, in remote mode (its `target`).
+ */
+export interface ServerPlayerInfo {
+  target: string; // in remote control
+  key: string;
+  streamUrl: string;
+  listeners: number;
+  alwaysOn: boolean; // plays even when nobody listens (a radio)
+  receiverAppId: string | null; // our own Now playing receiver on Chromecasts (null: none)
+  dashcast: boolean; // without it: that screen through DashCast (a third party's receiver)
+}
+
 /** A player the user created (e.g. "Phone"): browsers assigned to it play its own queue. */
 export interface WebPlayer {
   id: string;
@@ -410,6 +424,8 @@ export interface ExternalSettings {
   audibleRegions: string[];
   openLibrary: boolean;
   itunes: boolean;
+  castReceiverAppId: string | null; // the "Now playing" screen on Chromecasts
+  dashcast: boolean; // without it: that screen through DashCast (a third party's receiver)
 }
 
 /** A key: undefined keeps it, "" removes it, else the new key (checked by the server). */
@@ -423,6 +439,8 @@ export interface ExternalSettingsUpdate {
   audibleRegion?: string;
   openLibrary?: boolean;
   itunes?: boolean;
+  castReceiverAppId?: string; // "" removes it
+  dashcast?: boolean;
 }
 
 export interface ArtistInfo {
@@ -763,6 +781,12 @@ export const api = {
   renamePlayer: (id: string, name: string) =>
     request<WebPlayer>("PUT", `/players/${encodeURIComponent(id)}`, { name }),
   deletePlayer: (id: string) => request<void>("DELETE", `/players/${encodeURIComponent(id)}`),
+
+  // The server player: started and stopped here, driven through remote control.
+  getServerPlayer: () => request<ServerPlayerInfo | null>("GET", "/server-player"),
+  startServerPlayer: () => request<ServerPlayerInfo>("POST", "/server-player"),
+  setServerPlayer: (alwaysOn: boolean) => request<ServerPlayerInfo>("PUT", "/server-player", { alwaysOn }),
+  stopServerPlayer: () => request<void>("DELETE", "/server-player"),
 
   getExternalSettings: () => request<ExternalSettings>("GET", "/external/settings"),
   setExternalSettings: (settings: ExternalSettingsUpdate) =>

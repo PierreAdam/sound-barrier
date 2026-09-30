@@ -47,6 +47,10 @@ async def song_lyrics(
         return LyricsOut(
             found=False, unavailable=True, source=None, synced=False, instrumental=False, lines=[]
         )
+    return lyrics_out(found)
+
+
+def lyrics_out(found: lyrics.SongLyrics | None) -> LyricsOut:
     if found is None:
         return LyricsOut(found=False, source=None, synced=False, instrumental=False, lines=[])
     return LyricsOut(

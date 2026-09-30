@@ -263,3 +263,31 @@ export const RemoteIcon = () => (
     <path d="M15 9H9c-.55 0-1 .45-1 1v12c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V10c0-.55-.45-1-1-1zm-3 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM7.05 6.05l1.41 1.41C9.37 6.56 10.62 6 12 6s2.63.56 3.54 1.46l1.41-1.41C15.68 4.78 13.93 4 12 4s-3.68.78-4.95 2.05zM12 0C8.96 0 6.21 1.23 4.22 3.22l1.41 1.41C7.26 3.01 9.51 2 12 2s4.74 1.01 6.36 2.64l1.41-1.41C17.79 1.23 15.04 0 12 0z" />
   </Icon>
 );
+
+/** Four corners: full screen (`exit`: pointing inwards). */
+export const FullScreenIcon = ({ exit = false }: { exit?: boolean }) => (
+  <Icon>
+    <path
+      d={
+        exit
+          ? "M8 3h2v7H3V8h5zM14 3h2v5h5v2h-7zM3 14h7v7H8v-5H3zM14 14h7v2h-5v5h-2z"
+          : "M3 3h7v2H5v5H3zM14 3h7v7h-2V5h-5zM3 14h2v5h5v2H3zM19 14h2v7h-7v-2h5z"
+      }
+    />
+  </Icon>
+);
+
+/** Two sheets: copy (the stream's URL). */
+export const CopyIcon = () => (
+  <Icon>
+    <rect {...stroke} x="9" y="9" width="11" height="11" rx="2" />
+    <path {...stroke} d="M5 15V6a2 2 0 0 1 2-2h8" />
+  </Icon>
+);
+
+/** A square: stop (the server player). */
+export const StopIcon = () => (
+  <Icon>
+    <rect x="6" y="6" width="12" height="12" rx="2" />
+  </Icon>
+);

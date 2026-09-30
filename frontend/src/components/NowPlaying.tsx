@@ -6,6 +6,7 @@ import type { Track } from "../player/engine";
 import { usePlayer } from "../player/PlayerContext";
 import { albumUrl, artistUrl } from "../player/tracks";
 import { CoverArt } from "./CoverArt";
+import { FullScreenIcon } from "./Icons";
 import { loadLyrics, Lyrics } from "./Lyrics";
 import { Visualizer } from "./Visualizer";
 
@@ -30,9 +31,48 @@ export function useNowPlaying(): NowPlayingValue {
   return value;
 }
 
+/**
+ * Phones held sideways: the lyrics alone, over the whole screen. The browser's own full
+ * screen too where a page may ask for it (Android; not iPhone: there, the page only).
+ */
+function useFullScreen(open: boolean) {
+  const [full, setFull] = useState(false);
+
+  const exit = useCallback(() => {
+    setFull(false);
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+  }, []);
+
+  const toggle = useCallback(() => {
+    if (full) {
+      exit();
+      return;
+    }
+    setFull(true);
+    const root = document.documentElement;
+    if (root.requestFullscreen && !document.fullscreenElement) {
+      void root.requestFullscreen({ navigationUI: "hide" }).catch(() => undefined);
+    }
+  }, [full, exit]);
+
+  // The browser's full screen left (back gesture, Escape): this one too.
+  useEffect(() => {
+    const onChange = () => !document.fullscreenElement && setFull(false);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  useEffect(() => {
+    if (!open) exit();
+  }, [open, exit]);
+
+  return { full, toggle, exit };
+}
+
 /** Big cover, visualizer and lyrics (synced ones follow the song) of the current track. */
 export function NowPlaying() {
   const { open, close } = useNowPlaying();
+  const fullScreen = useFullScreen(open);
   const { state } = usePlayer();
   const location = useLocation();
   const current = state.current;
@@ -41,15 +81,32 @@ export function NowPlaying() {
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && close();
+    // Escape leaves the full screen first, then Now playing.
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (fullScreen.full) fullScreen.exit();
+      else close();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, close]);
+  }, [open, close, fullScreen.full, fullScreen.exit]);
   useEffect(close, [location.pathname, close]);
 
   if (!open) return null;
   return (
-    <section className="now-playing" aria-label="Now playing">
+    <section className={`now-playing${fullScreen.full ? " now-playing--full" : ""}`} aria-label="Now playing">
+      {current && (
+        <button
+          className={`icon-button now-playing__full-screen${fullScreen.full ? " icon-button--active" : ""}`}
+          type="button"
+          aria-label={fullScreen.full ? "Exit full screen" : "Lyrics in full screen"}
+          aria-pressed={fullScreen.full}
+          title={fullScreen.full ? "Exit full screen" : "Lyrics in full screen"}
+          onClick={fullScreen.toggle}
+        >
+          <FullScreenIcon exit={fullScreen.full} />
+        </button>
+      )}
       <button className="icon-button now-playing__close" type="button" aria-label="Close" onClick={close}>
         ×
       </button>

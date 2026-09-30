@@ -3,8 +3,10 @@ import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
 import { type AudibleBook, api, type SpokenDetails, type SpokenFileDetails, type SpokenKind } from "../api/native";
 import { useSession } from "../auth/AuthContext";
+import { Breadcrumb } from "../components/Breadcrumb";
 import { formatDuration, formatTime } from "../format";
 import { applyAudible } from "./audibleChapters";
+import { spokenCrumbs } from "./SpokenPages";
 
 /**
  * Admins: a book's / show's details after the import (the same fields as the import
@@ -15,6 +17,7 @@ export function SpokenDetailsPage({ kind }: { kind: SpokenKind }) {
   const { user } = useSession();
   const navigate = useNavigate();
   const [details, setDetails] = useState<SpokenDetails | null>(null);
+  const [saved, setSaved] = useState<SpokenDetails | null>(null); // as loaded: the breadcrumb's
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const book = kind === "audiobooks";
@@ -23,7 +26,10 @@ export function SpokenDetailsPage({ kind }: { kind: SpokenKind }) {
     if (!user.adminRole) return;
     api
       .getSpokenDetails(id)
-      .then(setDetails)
+      .then((loaded) => {
+        setDetails(loaded);
+        setSaved(loaded);
+      })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, [id, user.adminRole]);
 
@@ -50,6 +56,7 @@ export function SpokenDetailsPage({ kind }: { kind: SpokenKind }) {
 
   return (
     <div className="page tag-editor">
+      {saved && <Breadcrumb items={[...spokenCrumbs(kind, { id, ...saved }, false), { label: "Edit details" }]} />}
       <div className="page__header">
         <h1 className="page__title">Edit details</h1>
         <Link className="link" to={`/${kind}/${id}`}>

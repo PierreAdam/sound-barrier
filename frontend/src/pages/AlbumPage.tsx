@@ -1,26 +1,32 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import type { Child } from "../api/types";
 import { useSubsonic } from "../api/useSubsonic";
 import { AddToPlaylist } from "../components/AddToPlaylist";
 import { CoverArt } from "../components/CoverArt";
 import { useSession } from "../auth/AuthContext";
-import { AddIcon, EditIcon, PlayIcon, PlayNextIcon, ShuffleIcon } from "../components/Icons";
+import { AddIcon, EditIcon, PlayIcon, PlayNextIcon, ShuffleIcon, TrashIcon } from "../components/Icons";
 import { formatTime, plural } from "../format";
 import { songToTrack, usePlayer } from "../player/PlayerContext";
+import { AlbumsDelete } from "./manage/DeleteTab";
 
 /** Album view: header with actions, track list, cover on the right (like Subsonic). */
 export function AlbumPage() {
   const { id = "" } = useParams();
   const { data, error, loading } = useSubsonic("getAlbum", { id });
   const { state, engine } = usePlayer();
-  const { user } = useSession();
+  const { user, client } = useSession();
   const album = data?.album;
   const songs = album?.song ?? [];
   // Ticked tracks: "Add to queue" and "Play next" then only take those.
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
-  useEffect(() => setSelected(new Set()), [id]);
+  const [deleting, setDeleting] = useState(false); // admins: the delete panel is open
+  const navigate = useNavigate();
+  useEffect(() => {
+    setSelected(new Set());
+    setDeleting(false);
+  }, [id]);
 
   if (error) return <p className="text-error">{error.message}</p>;
   if (loading && !album) return <p className="text-muted">Loading…</p>;
@@ -99,6 +105,18 @@ export function AlbumPage() {
             Edit tags
           </Link>
         )}
+        {user.adminRole && (
+          <button
+            className={`action-bar__item${deleting ? " action-bar__item--active" : ""}`}
+            type="button"
+            aria-pressed={deleting}
+            onClick={() => setDeleting(!deleting)}
+            title="Delete this album, or some of its songs, from the library and the disk"
+          >
+            <TrashIcon />
+            Delete…
+          </button>
+        )}
         {selected.size > 0 && (
           <span className="selection-tag" title="Add to queue and Play next only take the ticked tracks">
             {plural(selected.size, "track")}
@@ -108,6 +126,26 @@ export function AlbumPage() {
           </span>
         )}
       </nav>
+
+      {deleting && user.adminRole && (
+        <AlbumsDelete
+          albums={[album]}
+          expanded
+          onDeleted={(albumIds, songIds) => {
+            // The whole album (or all its songs): off to its artist, or Browse if they went too.
+            const gone = albumIds.includes(album.id) || songs.every((s) => songIds.includes(s.id));
+            if (!gone) return;
+            const artistId = album.artistId;
+            const artistPage = artistId
+              ? client.call("getArtist", { id: artistId }).then(
+                  () => `/artists/${artistId}`,
+                  () => "/browse",
+                )
+              : Promise.resolve("/browse");
+            void artistPage.then((page) => navigate(page, { replace: true }));
+          }}
+        />
+      )}
 
       <div className="album__body">
         <table className="tracks">

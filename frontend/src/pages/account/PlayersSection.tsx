@@ -2,7 +2,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { api, type WebPlayers } from "../../api/native";
 import { useSession } from "../../auth/AuthContext";
-import { SWITCH_HINT } from "../../components/PlayerSwitch";
+import { SWITCH_HINT } from "../../components/PlaybackMenu";
 import { plural } from "../../format";
 import { setWebPlayerId, useWebPlayerId } from "../../player/webPlayer";
 

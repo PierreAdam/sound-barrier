@@ -49,10 +49,18 @@ review, helped by Audible, MusicBrainz, Open Library and iTunes.
   shuffle, repeat, crossfade, OS media keys and keyboard shortcuts (Space, ← / →).
 - **Players**: give a browser (your phone) a queue of its own, while the others keep the
   shared one. Create them in My account, switch from the queue panel.
-- **Remote control**: turn it on in a tab's queue panel, then drive that tab from another
-  tab, computer or phone ("Remote control" in the menu under your name): play / pause,
-  seek, previous / next, volume, shuffle, repeat, speed... Needs WebSockets through your
-  reverse proxy ([below](#behind-a-reverse-proxy-https)).
+- **Remote control** (the "Player" menu of the queue panel): let a tab be controlled, then
+  choose it from another tab, computer or phone. The player bar and the queue then show
+  that player (in a dull accent color, "Playing on …"), and what you play or queue while
+  browsing goes there. Needs WebSockets through your reverse proxy
+  ([below](#behind-a-reverse-proxy-https)).
+- **Server player**: a player on the server itself, whose sound is a stream: cast it to a
+  Chromecast (Chrome, Edge, Chrome on Android), AirPlay it, or open it in VLC or any
+  internet radio app. On a TV, a Now playing screen (cover, progress, synced lyrics):
+  through DashCast (a published receiver), mirrored privately by Chrome from your computer,
+  or through a Cast receiver you register yourself (Settings → External services). Controlled
+  like any other player, from any of your devices; it can keep playing when nobody
+  listens, like a radio.
 - **Now playing**: big cover, synced lyrics following the song (smooth scrolling, optional
   karaoke sweep, word by word when the lyrics have it) and a frequency visualizer.
 - Artist pages: "Play all", and the **missing albums** of the artist's MusicBrainz
@@ -252,8 +260,11 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Connection: Upgrade" -H "Upgrade: w
   -H "Origin: https://music.example.com" https://music.example.com/api/remote/ws
 ```
 
-Remote control is relayed in the server's memory: run **one** application container
-(no replicas); after a restart, tabs and remotes reconnect on their own.
+Remote control and the server player live in the server's memory: run **one**
+application container (no replicas); after a restart, tabs and remotes reconnect on their
+own (a server player has to be started again). The server player's stream is served at
+`/api/stream/…` (`proxy_buffering off`, as above); its URLs use `SOUND_BARRIER_PUBLIC_URL`
+when set (e.g. `https://music.example.com`), else the address of the request.
 
 ### Deploying a new version
 

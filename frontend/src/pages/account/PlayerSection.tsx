@@ -1,9 +1,13 @@
+import { useSyncExternalStore } from "react";
+
 import { MAX_CROSSFADE_SECONDS } from "../../player/engine";
-import { usePlayer } from "../../player/PlayerContext";
+import { useLocalPlayer } from "../../player/PlayerContext";
 
 /** Player preferences: crossfade is saved with the account (see PlayerContext). */
 export function PlayerSection() {
-  const { state, engine } = usePlayer();
+  // A setting of this browser's own player (and saved for the user), even in remote mode.
+  const engine = useLocalPlayer();
+  const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
   return (
     <section className="settings-section">
       <h2 className="settings-section__title">Player</h2>

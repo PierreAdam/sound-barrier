@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     tagger: Literal["beets", "as-is"] = "beets"
     # beets configuration (optional config.yaml) and database. None: <data_dir>/beets.
     beets_dir: Path | None = None
+    # The address devices reach the server at (e.g. https://music.example.com), for the
+    # server player's stream URLs. None: the address of the request.
+    public_url: str | None = None
 
     def require_secret_key(self) -> str:
         if self.secret_key is None or not self.secret_key.get_secret_value():

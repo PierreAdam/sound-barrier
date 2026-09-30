@@ -60,8 +60,8 @@ async def test_a_remote_drives_a_target() -> None:
     await hub.handle(phone, {"type": "command", "target": pc.id, "command": command})
     assert pc_inbox.last == {"type": "command", "command": command}
 
-    # Only the player bar's commands are passed on.
-    await hub.handle(phone, {"type": "command", "target": pc.id, "command": {"name": "clear"}})
+    # Only known commands are passed on.
+    await hub.handle(phone, {"type": "command", "target": pc.id, "command": {"name": "explode"}})
     assert pc_inbox.last == {"type": "command", "command": command}
 
     # A remote joining later gets the targets with their last state.
@@ -136,3 +136,55 @@ async def test_only_targets_report_and_only_remotes_command() -> None:
     assert len(remote_inbox.messages) == before
     assert target_inbox.of("command") == []
     assert other_inbox.messages == []
+
+
+async def test_watchers_get_the_queue() -> None:
+    hub = RemoteHub()
+    user = uuid.uuid4()
+    pc, _ = _join(hub, user)
+    await hub.handle(pc, _target_message(None, "Edge"))
+    queue = {"revision": 1, "keys": [0, 1], "tracks": [{"id": "a"}, {"id": "b"}]}
+    await hub.handle(pc, {"type": "queue", "queue": queue})
+
+    # Listing the targets does not bring their queues...
+    lister, lister_inbox = _join(hub, user)
+    await hub.handle(lister, {"type": "remote"})
+    # ...watching one does: at once (the last one sent), then at each change.
+    phone, phone_inbox = _join(hub, user)
+    await hub.handle(phone, {"type": "remote"})
+    await hub.handle(phone, {"type": "watch", "target": pc.id})
+    assert phone_inbox.last == {"type": "queue", "target": pc.id, "queue": queue}
+    changed = {**queue, "revision": 2, "keys": [1]}
+    await hub.handle(pc, {"type": "queue", "queue": changed})
+    assert phone_inbox.last == {"type": "queue", "target": pc.id, "queue": changed}
+    assert lister_inbox.of("queue") == []
+
+    await hub.handle(phone, {"type": "watch", "target": None})
+    await hub.handle(pc, {"type": "queue", "queue": queue})
+    assert phone_inbox.last["queue"] == changed  # no longer watching
+
+    # Queue commands are passed on, by key.
+    command = {"name": "move", "key": 1, "before": 0}
+    await hub.handle(phone, {"type": "command", "target": pc.id, "command": command})
+    assert _last_command(pc) == command
+
+
+def _last_command(target: Member) -> dict[str, Any]:
+    inbox = target.send
+    assert isinstance(inbox, Inbox)
+    return inbox.of("command")[-1]["command"]
+
+
+async def test_server_targets_are_listed_with_their_kind() -> None:
+    hub = RemoteHub()
+    user = uuid.uuid4()
+    commands = Inbox()
+    server = hub.join(user, commands, kind="server")
+    await hub.handle(server, _target_message("server:1", "Sound-Barrier"))
+    phone, phone_inbox = _join(hub, user)
+    await hub.handle(phone, {"type": "remote"})
+    assert [(t["kind"], t["device"]) for t in phone_inbox.last["targets"]] == [
+        ("server", "Sound-Barrier")
+    ]
+    await hub.handle(phone, {"type": "command", "target": server.id, "command": {"name": "undo"}})
+    assert commands.last == {"type": "command", "command": {"name": "undo"}}

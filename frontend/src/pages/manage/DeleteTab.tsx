@@ -28,8 +28,8 @@ const WORDS = {
 
 type Words = (typeof WORDS)[keyof typeof WORDS];
 
-/** The ticked albums / songs of a section, and deleting them. */
-function useDeletion(words: Words, onDeleted?: () => void) {
+/** The ticked albums / songs of a section, and deleting them (`onDeleted`: what went). */
+function useDeletion(words: Words, onDeleted?: (albumIds: string[], songIds: string[]) => void) {
   const [albums, setAlbums] = useState<Set<string>>(() => new Set());
   const [songs, setSongs] = useState<Set<string>>(() => new Set());
   const [result, setResult] = useState<DeleteResult | null>(null);
@@ -51,11 +51,12 @@ function useDeletion(words: Words, onDeleted?: () => void) {
     setBusy(true);
     setError(null);
     try {
-      setResult(await api.deleteMusic([...albums], [...songs]));
+      const deleted = { albums: [...albums], songs: [...songs] };
+      setResult(await api.deleteMusic(deleted.albums, deleted.songs));
       setAlbums(new Set());
       setSongs(new Set());
       invalidateSubsonicCache();
-      onDeleted?.();
+      onDeleted?.(deleted.albums, deleted.songs);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -145,12 +146,39 @@ function MusicDelete() {
   );
 }
 
+/**
+ * Deleting some of these albums, or single songs of them (an artist page, an album page):
+ * the list of Library Management → Delete, with its button. `onDeleted`: what went.
+ */
+export function AlbumsDelete({
+  albums,
+  expanded = false,
+  onDeleted,
+}: {
+  albums: AlbumID3[];
+  expanded?: boolean; // the songs shown at once (a single album)
+  onDeleted?(albumIds: string[], songIds: string[]): void;
+}) {
+  const deletion = useDeletion(WORDS.music, onDeleted);
+  return (
+    <section className="settings-section settings-section--wide">
+      <p className="text-muted">Tick whole albums or single songs, then delete. Files are removed from disk.</p>
+      <AlbumList
+        list={albums}
+        expanded={expanded}
+        albums={deletion.albums}
+        songs={deletion.songs}
+        onToggleAlbum={deletion.toggleAlbum}
+        onToggleSong={deletion.toggleSong}
+      />
+      {deletion.footer}
+    </section>
+  );
+}
+
 function ArtistAlbums({
   artistId,
-  albums,
-  songs,
-  onToggleAlbum,
-  onToggleSong,
+  ...ticks
 }: {
   artistId: string;
   albums: Set<string>;
@@ -159,9 +187,26 @@ function ArtistAlbums({
   onToggleSong(id: string): void;
 }) {
   const artist = useSubsonic("getArtist", { id: artistId });
-  const [open, setOpen] = useState<string | null>(null);
   if (artist.error) return <p className="text-error">{artist.error.message}</p>;
-  const list: AlbumID3[] = artist.data?.artist.album ?? [];
+  return <AlbumList list={artist.data?.artist.album ?? []} {...ticks} />;
+}
+
+function AlbumList({
+  list,
+  expanded = false,
+  albums,
+  songs,
+  onToggleAlbum,
+  onToggleSong,
+}: {
+  list: AlbumID3[];
+  expanded?: boolean;
+  albums: Set<string>;
+  songs: Set<string>;
+  onToggleAlbum(id: string): void;
+  onToggleSong(id: string): void;
+}) {
+  const [open, setOpen] = useState<string | null>(expanded ? (list[0]?.id ?? null) : null);
 
   return (
     <ul className="delete-list">

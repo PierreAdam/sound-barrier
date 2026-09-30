@@ -1,0 +1,214 @@
+<!doctype html>
+<!--
+  Sound-Barrier's Google Cast receiver: the server player's "Now playing" screen on a TV.
+  The TV plays the stream; this page follows the server player (`/api/stream/<key>/now`,
+  the cover, the lyrics) and shows what the TV plays, which is a little behind the server
+  (its buffer: see receiver.js).
+
+  A static page: it can be hosted anywhere (it learns the server and the key from the
+  stream URL). Opened by our own Cast app (registered with the page's URL, its id in
+  Settings → External services), by DashCast (`?stream=…&autoplay=1`), or mirrored by Chrome.
+
+  Chromecasts have little power: nothing here costs much to draw (no live blur, no mask,
+  no animation but the lyrics' scroll, on its own layer). Google's receiver framework is
+  only loaded when the page is our Cast app (not for DashCast or Chrome's mirroring).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sound-Barrier</title>
+    <style>
+      :root {
+        --accent: #1db8a0;
+        --text: #f2f4f7;
+        --muted: rgb(242 244 247 / 58%);
+        --bg: #0d0f13;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+
+      /* The cover behind everything: a tiny one stretched is blurred already (no filter). */
+      .backdrop {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.35;
+      }
+
+      .screen {
+        position: relative;
+        display: grid;
+        grid-template-columns: 38vw 1fr;
+        gap: 5vw;
+        align-items: center;
+        height: 100%;
+        padding: 7vh 6vw;
+      }
+
+      .cover {
+        width: 100%;
+        aspect-ratio: 1;
+        border-radius: 1.2vw;
+        background: rgb(255 255 255 / 6%);
+        object-fit: cover;
+      }
+
+      .side {
+        display: flex;
+        flex-direction: column;
+        gap: 1.6vh;
+        min-width: 0;
+        height: 100%;
+        justify-content: center;
+      }
+
+      .title {
+        margin: 0;
+        overflow: hidden;
+        font-size: 3.6vw;
+        font-weight: 700;
+        line-height: 1.15;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .artist {
+        margin: 0;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 1.8vw;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .progress {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 1.2vw;
+        align-items: center;
+        margin-top: 1.5vh;
+        color: var(--muted);
+        font-size: 1.2vw;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .bar {
+        height: 0.5vh;
+        border-radius: 1vh;
+        background: rgb(255 255 255 / 18%);
+        overflow: hidden;
+      }
+
+      /* Scaled, not resized: no layout while it moves. */
+      .bar > span {
+        display: block;
+        width: 100%;
+        height: 100%;
+        background: var(--accent);
+        transform: scaleX(0);
+        transform-origin: left;
+      }
+
+      .paused {
+        color: var(--accent);
+        font-size: 1.2vw;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      /* Synced lyrics: the current line in the middle, the list scrolling on its own layer. */
+      .lyrics {
+        position: relative;
+        flex: 1;
+        max-height: 48vh;
+        margin-top: 3vh;
+        overflow: hidden;
+      }
+
+      .lyrics ol {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        transition: transform 450ms ease-out;
+        will-change: transform;
+      }
+
+      /* Lines fade with their distance to the current one (no mask: set on a few lines only). */
+      .lyrics li {
+        padding: 0.6vh 0;
+        color: rgb(242 244 247 / 14%);
+        font-size: 2.2vw;
+        font-weight: 600;
+        line-height: 1.3;
+      }
+
+      .lyrics li.near2 {
+        color: rgb(242 244 247 / 28%);
+      }
+
+      .lyrics li.near1 {
+        color: rgb(242 244 247 / 45%);
+      }
+
+      .lyrics li.current {
+        color: var(--text);
+      }
+
+
+      .idle {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: var(--accent);
+        font-size: 3vw;
+        font-weight: 700;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <audio id="audio" hidden></audio>
+    <img class="backdrop" id="backdrop" alt="" hidden />
+    <div class="idle" id="idle">Sound-Barrier</div>
+    <main class="screen" id="screen" hidden>
+      <img class="cover" id="cover" alt="" />
+      <div class="side">
+        <span class="paused" id="paused" hidden>Paused</span>
+        <h1 class="title" id="title"></h1>
+        <p class="artist" id="artist"></p>
+        <div class="progress">
+          <span id="elapsed">0:00</span>
+          <div class="bar"><span id="bar"></span></div>
+          <span id="duration">0:00</span>
+        </div>
+        <div class="lyrics" id="lyrics" hidden><ol id="lines"></ol></div>
+      </div>
+    </main>
+    <script src="receiver.js"></script>
+  </body>
+</html>

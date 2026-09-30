@@ -1,13 +1,13 @@
 import { useSyncExternalStore } from "react";
 
-// Whether this tab can be remote controlled (turned on from the queue panel). Kept in
-// memory only: off again when the page reloads (a reloaded page may not start audio
-// before a click in it, it should not be listed as controllable).
+// Whether this tab can be remote controlled (turned on in the queue panel's Remote menu).
+// Kept in memory only: off again when the page reloads (a reloaded page may not start
+// audio before a click in it, it should not be listed as controllable).
 
 export type RemoteTargetStatus =
   | { kind: "off" }
   | { kind: "connecting" } // asked, or reconnecting
-  | { kind: "on" }
+  | { kind: "on"; id: string } // its id as a target (the Remote menu does not list itself)
   | { kind: "conflict"; device: string } // on in another tab, for the same player
   | { kind: "replaced"; device: string }; // another tab took over
 
