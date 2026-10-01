@@ -103,4 +103,25 @@ describe("ScreenLink", () => {
     expect(channel.closed).toBe(true);
     expect(link.takeBack()).toBeNull();
   });
+
+  it("passes the TV page's reports on, and keeps the latest (this tab controllable)", () => {
+    const link = new ScreenLink();
+    const channel = new FakeChannel();
+    link.start(channel, client, "TV", [], () => undefined);
+    const reports: string[] = [];
+    const stop = link.onReport((report) => reports.push(report.type));
+    const queue = { revision: 1, keys: [0, 1], tracks };
+    channel.receive({ type: "queue", queue });
+    channel.receive({ type: "state", state: state({}) });
+    expect(reports).toEqual(["queue", "state"]);
+    expect(link.latest()).toEqual({ queue, state: state({}) });
+    // A command from another device goes to the TV page as it is.
+    link.send(SCREEN_TARGET, { name: "next" });
+    expect(channel.sent.at(-1)).toEqual({ type: "command", command: { name: "next" } });
+    stop();
+    channel.receive({ type: "state", state: state({ playing: false }) });
+    expect(reports).toEqual(["queue", "state"]);
+    link.stop();
+    expect(link.latest()).toEqual({ queue: null, state: null });
+  });
 });

@@ -20,6 +20,7 @@ MAX_TEXT = 500
 
 _TEXT_FIELDS = ("id", "title", "artist", "album", "albumId", "artistId", "coverArt", "suffix")
 _NUMBER_FIELDS = ("durationSeconds", "year", "size", "bitRate")
+_BOOK_FIELDS = ("start", "duration", "chapter", "chapters")
 
 
 def _number(value: object) -> float | None:
@@ -61,6 +62,12 @@ def track_from(value: object) -> dict[str, Any] | None:
             chapters.append({"start": start, "title": title[:MAX_TEXT]})
     if chapters:
         track["chapters"] = sorted(chapters, key=lambda c: c["start"])
+    # Where the file is in its audiobook: only shown by the remotes (their book progress).
+    raw_book = raw.get("book")
+    book = cast(dict[str, Any], raw_book) if isinstance(raw_book, dict) else {}
+    place = {name: _number(book.get(name)) for name in _BOOK_FIELDS}
+    if all(value is not None for value in place.values()):
+        track["book"] = place
     return track
 
 

@@ -1,7 +1,10 @@
 // Display diagnostics (About → "Display diagnostics"): what the phone reports about the
 // screen, for layout bugs that only show on a phone (e.g. in an iPhone's home-screen app).
+// And whether the player diagnostics (About → "Player diagnostics") are open.
 
 const OPEN_KEY = "sb.diagnostics";
+const PLAYER_OPEN_KEY = "sb.player-diagnostics";
+export const PLAYER_DIAGNOSTICS_EVENT = "sb-player-diagnostics";
 
 function read(key: string): string | null {
   try {
@@ -39,6 +42,16 @@ export function diagnosticsOpen(): boolean {
 export function setDiagnosticsOpen(open: boolean): void {
   write(OPEN_KEY, open ? "1" : null);
   window.dispatchEvent(new Event("sb-diagnostics"));
+}
+
+/** Open, the player diagnostics stay so when the app is reopened (to see it reload). */
+export function playerDiagnosticsOpen(): boolean {
+  return read(PLAYER_OPEN_KEY) === "1";
+}
+
+export function setPlayerDiagnosticsOpen(open: boolean): void {
+  write(PLAYER_OPEN_KEY, open ? "1" : null);
+  window.dispatchEvent(new Event(PLAYER_DIAGNOSTICS_EVENT));
 }
 
 /** Measures a CSS length (e.g. "100lvh", "env(safe-area-inset-top)") in pixels. */

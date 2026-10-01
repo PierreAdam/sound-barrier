@@ -2555,6 +2555,30 @@ select.field__input {
   }
 }
 
+// The podcasts and audiobooks list: search and "Without transcript" above, pages below.
+.transcripts-list {
+  &__tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: @space-2 @space-4;
+  }
+
+  &__search {
+    flex: 1 1 240px;
+    max-width: 420px;
+  }
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: @space-3;
+  font-size: @font-size-sm;
+}
+
 .transcripts-table {
   &__toggle {
     padding: 0;
@@ -3993,11 +4017,20 @@ select.field__input {
     font-weight: 600;
   }
 
+  // The chapter's time (audiobooks with chapters), and the book's progress under it.
   &__time {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
     color: @color-text-muted;
     font-size: @font-size-sm;
     font-variant-numeric: tabular-nums;
+    line-height: 1.25;
     white-space: nowrap;
+  }
+
+  &__time-context {
+    font-size: @font-size-xs;
   }
 
   &__volume {
@@ -4166,16 +4199,14 @@ select.field__input {
     position: absolute;
     top: @space-3;
     right: @space-4;
-    font-size: @font-size-xl;
   }
 
-  // Phones held sideways only (below): the lyrics in full screen.
+  // The lyrics in full screen (every layout).
   &__full-screen {
     position: absolute;
     z-index: 2;
     top: @space-3;
     right: @space-4 + 40px; // left of the close button
-    display: none;
   }
 
   &__body {
@@ -4230,22 +4261,32 @@ select.field__input {
     position: absolute;
     z-index: 1;
     top: 0;
-    right: @space-6 + @space-4; // left of the close button
+    right: @space-6 + @space-4 + 40px; // left of the full screen and close buttons
     display: flex;
     align-items: center;
     gap: @space-2;
   }
 
   &__lyrics {
-    overflow-y: auto;
+    // Never sideways (the current line is scaled up a little: no horizontal scrollbar).
+    overflow: hidden auto;
     height: 100%;
     // The lines window moves by blocks (Lyrics.tsx): it keeps the view in place itself,
     // the same in every browser (Chrome's own scroll anchoring would shift it twice).
     overflow-anchor: none;
-    // Half the panel above and below the lyrics: every line, the first too, can be centered.
-    padding: ~"calc(50vh - 110px)" @space-4 ~"calc(50vh - 110px)" 0;
+    padding-right: @space-4;
     mask-image: linear-gradient(transparent, #000 15%, #000 85%, transparent);
     scrollbar-width: thin;
+
+    // Half the box above and below the lyrics: every line, the first too, can be centered.
+    // Of the box itself, not of the window (50vh): on phones that made it taller than its
+    // panel, running under the player bar, and its "center" lower than the visible one.
+    &::before,
+    &::after {
+      content: "";
+      display: block;
+      height: 50%;
+    }
   }
 
   &__empty {
@@ -4264,6 +4305,7 @@ select.field__input {
     &__side {
       flex-direction: row;
       align-items: center;
+      padding-right: 76px + @space-2; // the full screen and close buttons (2 × 36px, 4px apart)
     }
 
     &__cover {
@@ -4288,7 +4330,7 @@ select.field__input {
     &__side {
       flex-direction: row;
       align-items: center;
-      padding-right: @space-6; // the close button
+      padding-right: 76px + @space-2; // the full screen and close buttons (2 × 36px, 4px apart)
     }
 
     &__cover,
@@ -4298,10 +4340,6 @@ select.field__input {
 
     &__title {
       font-size: @font-size-lg;
-    }
-
-    &__full-screen {
-      display: inline-flex;
     }
   }
 
@@ -4324,7 +4362,6 @@ select.field__input {
     }
 
     .now-playing__full-screen {
-      display: inline-flex;
       opacity: 0.6;
     }
 
@@ -4637,23 +4674,6 @@ select.field__input {
   }
 }
 
-// Player bar: where the chapters inside the file start, on the progress line.
-.player__chapter-marks {
-  position: absolute;
-  top: -1.5px;
-  left: 0;
-  width: 100%;
-  height: 3px;
-  pointer-events: none;
-
-  span {
-    position: absolute;
-    width: 2px;
-    height: 100%;
-    background: @color-surface;
-  }
-}
-
 .player__chapter {
   color: @color-text;
 }
@@ -4781,10 +4801,15 @@ select.field__input {
 
 // Player bar: collapsing -------------------------------------------------------
 // When the bar gets narrow, its controls go, least useful first; the "⋯" menu then
-// holds all of them (time, shuffle, repeat, crossfade, visualizer, volume).
+// holds all of them (time, shuffle, repeat, crossfade, visualizer, volume). Once it shows,
+// the toggles it holds leave the bar together: never "⋯" next to its own items. Audiobooks
+// and podcasts collapse sooner: they add "Pause at end", the speed and a 3-line time.
 
-@container player (max-width: 1180px) {
-  .player__volume .slider {
+.player-compact() {
+  .player__volume .slider,
+  .player__now-playing,
+  .player__visualizer-toggle,
+  .player__crossfade {
     display: none;
   }
 
@@ -4793,10 +4818,20 @@ select.field__input {
   }
 }
 
+@container player (max-width: 1340px) {
+  .player--spoken {
+    .player-compact();
+  }
+}
+
+@container player (max-width: 1180px) {
+  .player {
+    .player-compact();
+  }
+}
+
 @container player (max-width: 1020px) {
   .player__time,
-  .player__crossfade,
-  .player__visualizer-toggle,
   .player__visualizer {
     display: none;
   }
@@ -4806,6 +4841,16 @@ select.field__input {
   .player__shuffle,
   .player__repeat {
     display: none;
+  }
+}
+
+// Audiobooks and podcasts: "Pause at end" and the speed (in "⋯") make room for the skips.
+@container player (max-width: 780px) {
+  .player--spoken {
+    .player__speed,
+    .player__pause-at-end {
+      display: none;
+    }
   }
 }
 
@@ -4906,11 +4951,17 @@ select.field__input {
 
 .player-menu {
   &__time {
+    flex-direction: column;
+    align-items: flex-start;
     margin: 0 0 @space-1;
     padding: 0 @space-2;
     color: @color-text-muted;
     font-size: @font-size-sm;
     font-variant-numeric: tabular-nums;
+  }
+
+  &__time-context {
+    font-size: @font-size-xs;
   }
 
   &__volume {
@@ -5202,7 +5253,7 @@ select.field__input {
   line-height: 1.5;
 }
 
-// Display diagnostics (About → "Display diagnostics", DisplayDiagnostics.tsx) -----------
+// Diagnostics (About → "Display diagnostics" / "Player diagnostics") ---------------------
 
 // Where the app ends (blue), the window (red), the screen's height (green).
 :root[data-diagnostics] .app::after {
@@ -5313,6 +5364,41 @@ select.field__input {
       font-family: ui-monospace, monospace;
       word-break: break-word;
     }
+  }
+
+  // About → "Player diagnostics" (PlayerDiagnostics.tsx): above the player bar, a log.
+  &--player {
+    top: auto;
+    bottom: calc(@player-height + 8px);
+    display: flex;
+    flex-direction: column;
+    max-height: 40%;
+    overflow: hidden;
+  }
+
+  &__log {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: @space-2 0 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+    font-family: ui-monospace, monospace;
+    overscroll-behavior: contain;
+
+    li {
+      padding: 1px 0;
+      border-top: 1px solid color-mix(in srgb, @color-border 60%, transparent);
+      word-break: break-word;
+    }
+
+    time {
+      color: @color-text-muted;
+    }
+  }
+
+  &__empty {
+    color: @color-text-muted;
   }
 }
 

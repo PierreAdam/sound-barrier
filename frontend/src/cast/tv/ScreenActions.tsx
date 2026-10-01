@@ -5,7 +5,6 @@ import { InfoTip } from "../../components/InfoTip";
 import { useLocalPlayer } from "../../player/PlayerContext";
 import type { RemoteCommand } from "../../remote/protocol";
 import { controlTarget, playHere, setModeNotice, usePlayerMode } from "../../remote/mode";
-import { disableRemoteTarget, getRemoteTarget } from "../../remote/target";
 import { canCastScreen, castScreen, openScreenWindow, type ScreenChannel } from "./channel";
 import { SCREEN_TARGET, screenLink } from "./screenLink";
 
@@ -34,7 +33,7 @@ export function ScreenActions({ close }: { close(): void }) {
     screenLink.start(channel, client, NAME, first, (blocked) =>
       setModeNotice(blocked ? "The TV page waits for a click to start the sound (the browser asks for one)" : null),
     );
-    if (getRemoteTarget().kind !== "off") disableRemoteTarget();
+    // Still controllable if it was: the other devices then control the TV through this tab.
     controlTarget(SCREEN_TARGET, NAME, "screen");
     close();
   }

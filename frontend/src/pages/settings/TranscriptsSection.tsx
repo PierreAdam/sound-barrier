@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { api, type TranscriptBook, type TranscriptFile, type TranscriptWork, type WorkerToken } from "../../api/native";
 import { formatDuration, plural } from "../../format";
+import { listPage } from "./transcriptList";
 
 const REFRESH_MS = 5000;
 const KIND_LABELS = { podcasts: "Podcast", audiobooks: "Audiobook" } as const;
@@ -229,9 +230,15 @@ function WorkersSection({ tokens, onChange }: { tokens: WorkerToken[]; onChange(
   );
 }
 
+/** The podcasts and audiobooks: searched, by default only those still missing text, 10 a page. */
 function BooksSection({ books, onChange }: { books: TranscriptBook[]; onChange(): Promise<void> }) {
   const [open, setOpen] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [withoutText, setWithoutText] = useState(true);
+  const [page, setPage] = useState(1);
+  // Kept in range by listPage (the list changes as files get their text).
+  const shown = listPage(books, { query, withoutText, page });
 
   async function run(operation: () => Promise<unknown>) {
     setError(null);
@@ -268,28 +275,83 @@ function BooksSection({ books, onChange }: { books: TranscriptBook[]; onChange()
             {done} of {plural(total, "file")} have their text.
           </p>
           {error && <p className="text-error">{error}</p>}
-          <table className="users-table transcripts-table">
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Length</th>
-                <th>Text</th>
-                <th aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {books.map((book) => (
-                <BookRow
-                  key={book.id}
-                  book={book}
-                  open={open === book.id}
-                  onToggle={() => setOpen(open === book.id ? null : book.id)}
-                  onRetry={() => void run(() => api.retryTranscripts(book.id))}
-                  onRemove={() => remove(book)}
-                />
-              ))}
-            </tbody>
-          </table>
+          <div className="transcripts-list__tools">
+            <input
+              className="field__input transcripts-list__search"
+              type="search"
+              placeholder="Search a title or an author"
+              aria-label="Search the podcasts and audiobooks"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
+            />
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={withoutText}
+                onChange={(e) => {
+                  setWithoutText(e.target.checked);
+                  setPage(1);
+                }}
+              />
+              Without transcript
+            </label>
+          </div>
+          {shown.matching === 0 ? (
+            <p className="text-muted">
+              {query.trim()
+                ? `Nothing matches “${query.trim()}”${withoutText ? " among those without transcript" : ""}.`
+                : "Every podcast and audiobook has its text."}
+            </p>
+          ) : (
+            <table className="users-table transcripts-table">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Length</th>
+                  <th>Text</th>
+                  <th aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {shown.books.map((book) => (
+                  <BookRow
+                    key={book.id}
+                    book={book}
+                    open={open === book.id}
+                    onToggle={() => setOpen(open === book.id ? null : book.id)}
+                    onRetry={() => void run(() => api.retryTranscripts(book.id))}
+                    onRemove={() => remove(book)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          )}
+          {shown.pages > 1 && (
+            <nav className="pagination" aria-label="Pages">
+              <button
+                className="button button--ghost"
+                type="button"
+                disabled={shown.page <= 1}
+                onClick={() => setPage(shown.page - 1)}
+              >
+                Previous
+              </button>
+              <span className="text-muted">
+                Page {shown.page} of {shown.pages} · {plural(shown.matching, "entry", "entries")}
+              </span>
+              <button
+                className="button button--ghost"
+                type="button"
+                disabled={shown.page >= shown.pages}
+                onClick={() => setPage(shown.page + 1)}
+              >
+                Next
+              </button>
+            </nav>
+          )}
         </>
       )}
     </section>

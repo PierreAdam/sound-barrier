@@ -8,7 +8,6 @@ import {
   castScreenWithDashCast,
   castState,
   castStream,
-  DEFAULT_RECEIVER,
   loadCast,
   onCastState,
   screenUrl,
@@ -102,13 +101,10 @@ export function ServerPlayerSection({
         setMessage("Now playing shown from this computer: keep it on, with Chrome open");
         return;
       }
-      let device: string | null;
-      if (way === "screen" && !info.receiverAppId) {
-        device = await castScreenWithDashCast(info.streamUrl);
-      } else {
-        const appId = way === "screen" && info.receiverAppId ? info.receiverAppId : DEFAULT_RECEIVER;
-        device = await castStream(info.streamUrl, "Sound-Barrier", SERVER_PLAYER, appId);
-      }
+      const device =
+        way === "screen"
+          ? await castScreenWithDashCast(info.streamUrl)
+          : await castStream(info.streamUrl, "Sound-Barrier", SERVER_PLAYER);
       if (!device) return; // no device chosen
       control(info); // what the device plays is driven from here
       setMessage(`Casting to ${device}${way === "audio" ? " (sound only)" : ""}`);
@@ -120,16 +116,14 @@ export function ServerPlayerSection({
   const fallback = sdkCast ? null : remotePlaybackLabel();
   // What this browser can do, best first: the first one is "Cast…", the others under "▾".
   const ways: CastWay[] = [];
-  if (sdkCast && player && (player.receiverAppId || player.dashcast)) ways.push("screen");
+  if (sdkCast && player?.dashcast) ways.push("screen");
   if (player && canPresent()) ways.push("computer");
   if (sdkCast) ways.push("audio");
   else if (fallback) ways.push("browser");
   const WAYS: Record<CastWay, { label: string; note: string }> = {
     screen: {
       label: "Cast with Now playing",
-      note: player?.receiverAppId
-        ? "Cover, progress and lyrics on the TV"
-        : "Cover, progress and lyrics on the TV, through DashCast (a third party's receiver: it is given the stream's address)",
+      note: "Cover, progress and lyrics on the TV, through DashCast (a third party's receiver: it is given the stream's address)",
     },
     computer: {
       label: "Cast from this computer",

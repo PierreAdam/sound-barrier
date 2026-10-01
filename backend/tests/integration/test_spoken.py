@@ -158,6 +158,18 @@ async def test_bookmarks_and_pages(
         detail = (await web.get(f"/api/spoken/shows/{book['id']}")).json()
         chapter_2 = detail["episodes"][1]
         assert chapter_2["title"] == "Chapter 2"
+        # Where each file is in the book: the player shows the book's progress with it.
+        chapter_1 = detail["episodes"][0]
+        length = chapter_1["duration"] * 1000
+        assert chapter_1["book"]["startMs"] == 0
+        assert chapter_2["book"]["startMs"] > 0  # the first file's length
+        assert (chapter_2["book"]["chapter"], chapter_2["book"]["chapters"]) == (1, 2)
+        assert chapter_2["book"]["durationMs"] >= length
+        # Also in a saved queue that starts in the middle of the book.
+        saved = await web.put("/api/queue", json={"songIds": [chapter_2["id"]], "currentIndex": 0})
+        assert saved.status_code == 200, saved.text
+        [queued] = (await web.get("/api/queue")).json()["songs"]
+        assert queued["book"] == chapter_2["book"]
 
     created = await _call(client, user, "createBookmark", id=chapter_2["id"], position="65000")
     assert created["status"] == "ok"
@@ -223,6 +235,11 @@ async def test_chapters_dismiss_and_delete(
             {"startMs": 0, "title": "Opening"},
             {"startMs": 500, "title": "Ending"},
         ]
+        assert (file["book"]["startMs"], file["book"]["chapter"], file["book"]["chapters"]) == (
+            0,
+            0,
+            2,
+        )
         book = (await web.get(f"/api/spoken/shows/{shows['A Book']['id']}")).json()
         assert all("chapters" not in e for e in book["episodes"])  # files without chapters
 

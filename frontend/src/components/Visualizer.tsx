@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { analyserFor } from "../player/audioGraph";
 import { usePlayer } from "../player/PlayerContext";
@@ -11,12 +11,24 @@ export function Visualizer({ className = "", bars = 48 }: { className?: string; 
   const { engine, state, remote } = usePlayer();
   const canvas = useRef<HTMLCanvasElement>(null);
   const playing = state.playing;
+  // Not shown (hidden by the layout, e.g. Now playing on phones): no Web Audio at all
+  // until it is, playback then goes straight to the speakers.
+  const [shown, setShown] = useState(false);
 
   useEffect(() => {
     const element = canvas.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => setShown(element.getClientRects().length > 0 && element.clientWidth > 0));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [remote]);
+
+  useEffect(() => {
+    const element = canvas.current;
+    if (!element || !shown) return;
     const analyser = analyserFor(engine);
-    const context = element?.getContext("2d");
-    if (!element || !analyser || !context) return;
+    const context = element.getContext("2d");
+    if (!analyser || !context) return;
     const data = new Uint8Array(analyser.frequencyBinCount);
     // Up to ~16 kHz (the top of the spectrum is mostly empty), low frequencies spread out.
     const usable = Math.floor(data.length * 0.72);
@@ -48,7 +60,7 @@ export function Visualizer({ className = "", bars = 48 }: { className?: string; 
     };
     draw();
     return () => cancelAnimationFrame(frame);
-  }, [engine, bars, playing]);
+  }, [engine, bars, playing, shown]);
 
   // Remote mode: nothing plays in this tab to show.
   if (remote) return null;

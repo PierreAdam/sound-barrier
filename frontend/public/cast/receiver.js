@@ -1,5 +1,5 @@
-// Sound-Barrier's Google Cast receiver (see receiver.html). Plain JavaScript: this page is
-// served as is (no build), to Chromecasts.
+// The server player's Now playing screen on a TV (see receiver.html). Plain JavaScript:
+// this page is served as is (no build), to Chromecasts.
 //
 // What the TV plays is behind the server player: the sound it plays now was sent a few
 // seconds ago. The server keeps a timeline of what played when, on the stream's own clock
@@ -7,11 +7,10 @@
 // stream URL is given a `listener` name for that). So: heard = start + seconds played here,
 // and what played at `heard` is the last change of the timeline before it.
 //
-// Without the Cast framework: receiver.html?stream=<the stream's URL> plays it here, with
-// the TV's screen. A preview in any browser (a click starts the sound); with `&autoplay=1`,
-// the screen opened for a TV by the web UI when no receiver of our own is registered:
-// DashCast (a published receiver that opens a page) on the Chromecast itself, or Chrome
-// mirroring it from the computer (Presentation API).
+// receiver.html?stream=<the stream's URL> plays it here, with the TV's screen. A preview in
+// any browser (a click starts the sound); with `&autoplay=1`, the screen opened for a TV by
+// the web UI: DashCast (a published receiver that opens a page) on the Chromecast itself,
+// or Chrome mirroring it from the computer (Presentation API).
 //
 // Chromecasts have little power: the screen is checked 10 times a second (not at every
 // frame), and only what changed is written to the page.
@@ -21,7 +20,6 @@
 
   const POLL_MS = 1000;
   const TICK_MS = 100;
-  const CAF = "https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js";
   const STREAM = /^(https?:\/\/[^?#]+?)\/api\/stream\/([A-Za-z0-9_-]+)/;
   const params = new URLSearchParams(location.search);
   const preview = params.get("stream");
@@ -31,7 +29,6 @@
   }
   const audio = el.audio;
 
-  let player = null; // the Cast framework's, when this page is our Cast app
   let stream = null; // { base, key, listener }
   let now = null; // the last /now answer
   let shownKey; // the entry shown (its key), to update what changes with it
@@ -59,35 +56,8 @@
     return `${match[1]}/api/stream/${match[2]}?listener=${listener}`;
   }
 
-  /** Our Cast app: the framework plays what the sender asks (loaded only then: it is big). */
-  function startReceiver() {
-    const script = document.createElement("script");
-    script.src = CAF;
-    script.onload = () => {
-      const context = cast.framework.CastReceiverContext.getInstance();
-      player = context.getPlayerManager();
-      player.setMediaElement(audio);
-      // Asked to play a server player's stream: remember where it is, name this listener.
-      player.setMessageInterceptor(cast.framework.messages.MessageType.LOAD, (request) => {
-        const named = follow(request.media.contentUrl || request.media.contentId);
-        if (named) {
-          request.media.contentUrl = named;
-          request.media.contentId = named;
-        }
-        request.media.streamType = cast.framework.messages.StreamType.LIVE;
-        return request;
-      });
-      const options = new cast.framework.CastReceiverOptions();
-      // Paused, the server player sends silence: still playing here, nothing to time out.
-      options.disableIdleTimeout = true;
-      options.maxInactivity = 3600;
-      context.start(options);
-    };
-    document.head.appendChild(script);
-  }
-
   if (!preview) {
-    startReceiver();
+    el.idle.textContent = "Open it from Sound-Barrier: the server player's Cast menu";
   } else {
     const named = follow(preview);
     el.idle.textContent = named ? "Sound-Barrier" : "Not a Sound-Barrier stream URL";
@@ -148,11 +118,18 @@
     return `${stream.base}/api/stream/${stream.key}/cover?id=${encodeURIComponent(track.coverArt)}&size=${size}`;
   }
 
-  /** The chapter playing inside an audiobook's file, if it has some. */
-  function chapterAt(track, position) {
+  /** The chapter playing inside an audiobook's file, if it has some, and where it ends. */
+  function chapterAt(track, position, duration) {
     let found = null;
-    for (const chapter of track.chapters || []) if (chapter.start <= position + 0.5) found = chapter;
-    return found;
+    let end = duration;
+    for (const chapter of track.chapters || []) {
+      if (chapter.start <= position + 0.5) found = chapter;
+      else if (found) {
+        end = chapter.start;
+        break;
+      }
+    }
+    return found && { title: found.title, start: found.start, end: Math.max(end, found.start) };
   }
 
   async function loadLyrics(track) {
@@ -208,21 +185,6 @@
     el.lines.style.transform = `translate3d(0, ${-offset}px, 0)`;
   }
 
-  /** The TV's own media information (Google Home, phones' notifications): the track. */
-  function announce(track) {
-    if (!player) return;
-    const info = player.getMediaInformation();
-    if (!info) return;
-    const metadata = new cast.framework.messages.MusicTrackMediaMetadata();
-    metadata.title = track.title;
-    metadata.artist = track.artist || "";
-    metadata.albumName = track.album || "";
-    const cover = coverUrl(track, 512);
-    metadata.images = cover ? [new cast.framework.messages.Image(cover)] : [];
-    info.metadata = metadata;
-    player.setMediaInformation(info, true);
-  }
-
   function draw() {
     const state = heard();
     const track = state && state.mark.track;
@@ -238,18 +200,20 @@
       // Tiny, stretched: blurred by the scaling itself.
       set("backdrop", coverUrl(track, 32), (url) => (el.backdrop.src = url || ""));
       set("title", track.title, (text) => (el.title.textContent = text));
-      set("durationText", time(track.durationSeconds), (text) => (el.duration.textContent = text));
-      announce(track);
       if (lyricsFor !== track.id) void loadLyrics(track);
     }
     const duration = track.durationSeconds || 0;
     const position = duration ? Math.min(state.position, duration) : state.position;
-    const chapter = chapterAt(track, position);
+    const chapter = chapterAt(track, position, duration);
     const artist = [chapter && chapter.title, track.artist, track.album !== track.title && track.album].filter(Boolean).join(" · ");
     set("artist", artist, (text) => (el.artist.textContent = text));
     set("paused", state.mark.playing, (playing) => (el.paused.hidden = playing));
-    set("elapsed", time(position), (text) => (el.elapsed.textContent = text));
-    const ratio = duration ? Math.min(1, position / duration) : 0;
+    // The chapter playing when the file has chapters inside it (as the web UI's bar).
+    const start = chapter ? chapter.start : 0;
+    const length = chapter ? chapter.end - chapter.start : duration;
+    set("elapsed", time(Math.max(position - start, 0)), (text) => (el.elapsed.textContent = text));
+    set("durationText", time(length), (text) => (el.duration.textContent = text));
+    const ratio = length > 0 ? Math.min(1, Math.max(position - start, 0) / length) : 0;
     set("bar", Math.round(ratio * 500) / 500, (value) => (el.bar.style.transform = `scaleX(${value})`));
     drawLyrics(position, false);
   }

@@ -9,6 +9,7 @@ import { PreferencesProvider } from "../preferences/PreferencesContext";
 import { RemoteTargetBridge } from "../remote/RemoteTargetBridge";
 import { DisplayDiagnostics } from "./DisplayDiagnostics";
 import { NowPlaying, NowPlayingProvider } from "./NowPlaying";
+import { PlayerDiagnostics } from "./PlayerDiagnostics";
 import { PlayerDock } from "./PlayerDock";
 import { SidePanel } from "./SidePanel";
 import { TopBar } from "./TopBar";
@@ -44,6 +45,7 @@ export function AppShell() {
               <PlayerDock panelOpen={panelOpen} onQueueOpen={() => setPanelOpen(false)} />
             </div>
             <DisplayDiagnostics />
+            <PlayerDiagnostics />
           </NowPlayingProvider>
         </PlayerProvider>
       </SectionsProvider>

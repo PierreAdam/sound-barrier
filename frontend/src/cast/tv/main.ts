@@ -8,6 +8,7 @@ import { coverVersion } from "../../api/coverVersions";
 import { SubsonicClient } from "../../api/subsonic";
 import { createBookmarkKeeper, FINISHED_S, RESUME_FROM_S, STARTED_S } from "../../player/bookmarks";
 import { type AudioLike, PlayerEngine, type Track } from "../../player/engine";
+import { progressOf } from "../../player/progress";
 import { createScrobbler } from "../../player/scrobble";
 import { applyCommand } from "../../remote/apply";
 import { createReporter } from "../../remote/reporter";
@@ -199,9 +200,12 @@ class Screen {
     const artist = [chapter?.title, track.artist, track.album !== track.title && track.album].filter(Boolean).join(" · ");
     this.set("artist", artist, (text) => (el.artist!.textContent = text));
     this.set("paused", state.playing, (playing) => (el.paused!.hidden = playing));
-    this.set("elapsed", time(position), (text) => (el.elapsed!.textContent = text));
-    this.set("duration", time(duration), (text) => (el.duration!.textContent = text));
-    const ratio = duration ? Math.min(1, position / duration) : 0;
+    // The chapter playing when the file has chapters inside it (see player/progress.ts).
+    const span = progressOf(track, position, duration, state.chapter);
+    const length = span.end - span.start;
+    this.set("elapsed", time(Math.max(position - span.start, 0)), (text) => (el.elapsed!.textContent = text));
+    this.set("duration", time(length), (text) => (el.duration!.textContent = text));
+    const ratio = length > 0 ? Math.min(1, Math.max(position - span.start, 0) / length) : 0;
     this.set("bar", Math.round(ratio * 500) / 500, (value) => (el.bar!.style.transform = `scaleX(${value})`));
     this.drawLyrics(position);
   }

@@ -6,7 +6,7 @@ import type { Track } from "../player/engine";
 import { usePlayer } from "../player/PlayerContext";
 import { albumUrl, artistUrl } from "../player/tracks";
 import { CoverArt } from "./CoverArt";
-import { FullScreenIcon } from "./Icons";
+import { FullScreenIcon, RemoveIcon } from "./Icons";
 import { loadLyrics, Lyrics } from "./Lyrics";
 import { Visualizer } from "./Visualizer";
 
@@ -32,8 +32,8 @@ export function useNowPlaying(): NowPlayingValue {
 }
 
 /**
- * Phones held sideways: the lyrics alone, over the whole screen. The browser's own full
- * screen too where a page may ask for it (Android; not iPhone: there, the page only).
+ * The lyrics alone, over the whole screen (any layout). The browser's own full screen too
+ * where a page may ask for it (desktops, Android; not iPhone: there, the page only).
  */
 function useFullScreen(open: boolean) {
   const [full, setFull] = useState(false);
@@ -107,8 +107,9 @@ export function NowPlaying() {
           <FullScreenIcon exit={fullScreen.full} />
         </button>
       )}
-      <button className="icon-button now-playing__close" type="button" aria-label="Close" onClick={close}>
-        ×
+      {/* An icon like its neighbour's (a "×" character sat at its font's height, not theirs). */}
+      <button className="icon-button now-playing__close" type="button" aria-label="Close" title="Close" onClick={close}>
+        <RemoveIcon />
       </button>
       {current ? (
         <div className="now-playing__body">

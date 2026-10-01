@@ -2,6 +2,8 @@ import { type CSSProperties, type JSX, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { formatTime } from "../format";
+import { ago } from "../player/bookmarkSync";
+import { progressOf } from "../player/progress";
 import type { Track } from "../player/engine";
 import { usePlayer, useResumeNotice } from "../player/PlayerContext";
 import { usePreferences } from "../preferences/PreferencesContext";
@@ -58,7 +60,10 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
   const { state, engine, remote } = usePlayer();
   const { current } = state;
   const disabled = current === null;
-  const progress = state.duration > 0 ? Math.min(100, (state.position / state.duration) * 100) : 0;
+  // The chapter playing when the file has some, else the file; and where it is in the book.
+  const span = progressOf(current, state.position, state.duration, state.chapter);
+  const length = span.end - span.start;
+  const progress = length > 0 ? Math.min(100, ((state.position - span.start) / length) * 100) : 0;
   const nowPlaying = useNowPlaying();
   const resume = useResumeNotice();
   const { preferences, update } = usePreferences();
@@ -95,27 +100,19 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
 
   return (
     // Mouse clicks on its buttons do not focus them: Space then still plays / pauses.
-    <footer className={`player${remote ? " player--remote" : ""}`} aria-label="Player" onMouseDown={keepFocus}>
+    <footer className={`player${spoken ? " player--spoken" : ""}${remote ? " player--remote" : ""}`} aria-label="Player" onMouseDown={keepFocus}>
       <input
         className="player__seek"
         type="range"
         aria-label="Seek"
         min={0}
-        max={state.duration || 1}
+        max={length || 1}
         step={1}
-        value={Math.min(state.position, state.duration || 0)}
+        value={Math.min(Math.max(state.position - span.start, 0), length)}
         disabled={disabled}
         style={{ "--progress": `${progress}%` } as CSSProperties}
-        onChange={(e) => engine.seek(Number(e.target.value))}
+        onChange={(e) => engine.seek(span.start + Number(e.target.value))}
       />
-      {chapters && state.duration > 0 && (
-        // Where the chapters inside the file start.
-        <div className="player__chapter-marks" aria-hidden="true">
-          {chapters.slice(1).map((c) => (
-            <span key={c.start} style={{ left: `${(c.start / state.duration) * 100}%` }} />
-          ))}
-        </div>
-      )}
 
       <div className="player__track">
         <button
@@ -135,12 +132,25 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
                 {titleUrl ? <Link to={titleUrl}>{current.title}</Link> : current.title}
               </span>
               {!remote && resume.notice?.trackId === current.id ? (
-                <span className="player__resumed" role="status">
-                  Resumed at {formatTime(resume.notice.seconds)} ·{" "}
-                  <button className="link-button" type="button" onClick={resume.startOver}>
-                    Start over
-                  </button>
-                </span>
+                resume.notice.from ? (
+                  // Moved to where another device left it (useBookmarks).
+                  <span className="player__resumed" role="status" title={resume.notice.from.source ?? undefined}>
+                    {resume.notice.from.tookOver
+                      ? `Continued on ${resume.notice.from.source ?? "another device"}: paused here`
+                      : `Moved to ${formatTime(resume.notice.seconds)} from ${resume.notice.from.source ?? "another device"} (${ago(resume.notice.from.changedAt)})`}{" "}
+                    ·{" "}
+                    <button className="link-button" type="button" onClick={resume.undo}>
+                      Undo
+                    </button>
+                  </span>
+                ) : (
+                  <span className="player__resumed" role="status">
+                    Resumed at {formatTime(resume.notice.seconds)} ·{" "}
+                    <button className="link-button" type="button" onClick={resume.startOver}>
+                      Start over
+                    </button>
+                  </span>
+                )
               ) : state.pauseAtEnd ? (
                 // Also on phones, where the button is in the "⋯" menu.
                 <span className="player__artist player__pause-note" role="status">
@@ -305,7 +315,9 @@ export function PlayerBar({ queueOpen, onToggleQueue }: { queueOpen: boolean; on
           </button>
         )}
         <span className="player__time">
-          {formatTime(state.position)} / {formatTime(state.duration)}
+          {span.time}
+          {span.chapter && <span className="player__time-context">{span.chapter}</span>}
+          {span.left && <span className="player__time-context">{span.left}</span>}
         </span>
         <PlayerMenu
           miniVisualizer={miniVisualizer}
@@ -402,6 +414,7 @@ function PlayerMenu({
 }) {
   const { state, engine, remote } = usePlayer();
   const nowPlaying = useNowPlaying();
+  const span = progressOf(state.current, state.position, state.duration, state.chapter);
 
   const item = (label: string, active: boolean, onClick: () => void, icon: JSX.Element) => (
     <button
@@ -422,7 +435,9 @@ function PlayerMenu({
         <>
           {state.current && (
             <p className="dropdown__header player-menu__time">
-              {formatTime(state.position)} / {formatTime(state.duration)}
+              {span.time}
+              {span.chapter && <span className="player-menu__time-context">{span.chapter}</span>}
+              {span.left && <span className="player-menu__time-context">{span.left}</span>}
             </p>
           )}
           {/* Not for audiobooks and podcasts. */}

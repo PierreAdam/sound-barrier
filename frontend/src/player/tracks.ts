@@ -19,6 +19,12 @@ export function songToTrack(song: Child): Track {
     longForm: song.mediaType === "audiobook" || song.mediaType === "podcast",
     spokenKind: song.mediaType === "audiobook" ? "audiobooks" : song.mediaType === "podcast" ? "podcasts" : undefined,
     chapters: song.chapters?.map((c) => ({ start: c.startMs / 1000, title: c.title })),
+    book: song.book && {
+      start: song.book.startMs / 1000,
+      duration: song.book.durationMs / 1000,
+      chapter: song.book.chapter,
+      chapters: song.book.chapters,
+    },
   };
 }
 

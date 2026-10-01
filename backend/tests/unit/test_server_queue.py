@@ -50,6 +50,15 @@ def test_tracks_keep_only_known_fields_of_the_right_types() -> None:
     assert tracks_from([raw, "junk", None]) == [track_from(raw)]
 
 
+def test_tracks_keep_their_place_in_the_book() -> None:
+    place = {"start": 3600, "duration": 7200.5, "chapter": 3, "chapters": 10}
+    track = track_from({"id": "s1", "title": "Part 2", "book": place})
+    assert track is not None and track["book"] == {k: float(v) for k, v in place.items()}
+    # Incomplete or of the wrong types: left out.
+    for book in ({"start": 0, "duration": 1, "chapter": 0}, {**place, "chapters": "10"}, "x"):
+        assert "book" not in (track_from({"id": "s1", "title": "T", "book": book}) or {})
+
+
 def test_add_play_next_and_remove_by_key() -> None:
     queue = Queue()
     assert queue.add(queue.entries([({"id": "a", "title": "A"}, Path("a"))])) is True

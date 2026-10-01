@@ -7,12 +7,33 @@ class FakeAudio implements AudioLike {
   playbackRate = 1;
   defaultPlaybackRate = 1;
   src = "";
-  currentTime = 0;
   duration = Number.NaN;
   volume = 1;
   muted = false;
   paused = true;
+  /** 0: not loaded yet, like a mobile browser's audio before it is played. */
+  readyState = 4;
+  seeking = false;
+  seeks = 0; // positions set once loaded
+  private time = 0;
   private listeners = new Map<string, Set<() => void>>();
+
+  get currentTime(): number {
+    return this.time;
+  }
+  // Like Safari on iOS: a position set before the audio is loaded is ignored.
+  set currentTime(seconds: number) {
+    if (this.readyState < 1) return;
+    this.time = seconds;
+    this.seeks++;
+  }
+  /** Simulates the audio loading (after a tap on play, on a phone). */
+  loadMetadata(): void {
+    this.readyState = 1;
+    this.fire("loadedmetadata");
+    this.readyState = 4;
+    this.fire("canplay");
+  }
 
   play(): Promise<void> {
     this.paused = false;
@@ -47,13 +68,14 @@ class FakeAudio implements AudioLike {
 
 const tracks: Track[] = ["a", "b", "c", "d"].map((id) => ({ id, title: id.toUpperCase() }));
 
-function setup() {
+function setup({ loaded = true } = {}) {
   const decks: FakeAudio[] = [];
   let now = 0;
   const engine = new PlayerEngine({
     streamUrl: (id) => `/stream/${id}`,
     createAudio: () => {
       const deck = new FakeAudio();
+      if (!loaded) deck.readyState = 0;
       decks.push(deck);
       return deck;
     },
@@ -436,6 +458,106 @@ describe("saved queue", () => {
 
     engine.restoreQueue({ tracks: [], originalOrder: null, index: -1, position: 0 });
     expect(engine.getSnapshot().current).toBeNull();
+  });
+
+  // Phones load the audio only once played. Safari on iOS starts a seek asked before, and
+  // never completes it: it reads the position, and plays from 0.
+  it("keeps a restored position until the audio plays, then goes there", () => {
+    const { engine, decks } = setup({ loaded: false });
+    const book: Track[] = [{ id: "file1", title: "Book", longForm: true }];
+    engine.restoreQueue({ tracks: book, originalOrder: null, index: 0, position: 1234 });
+    const deck = decks[0] as FakeAudio;
+    expect(engine.getSnapshot().position).toBe(1234);
+    expect(engine.currentTime).toBe(1234);
+    expect(engine.exportQueue().position).toBe(1234); // not saved back as 0
+
+    deck.loadMetadata(); // paused: nothing sought yet
+    expect(deck.seeks).toBe(0);
+    expect(engine.getSnapshot().position).toBe(1234);
+
+    void deck.play();
+    expect(deck.currentTime).toBe(1234);
+    deck.fire("seeked");
+    deck.advance(1240);
+    expect(engine.getSnapshot().position).toBe(1240);
+  });
+
+  it("goes there once it can play, when played before its audio was loaded", () => {
+    const { engine, decks } = setup({ loaded: false });
+    engine.playQueue(tracks, 0, 120); // a chapter, played at once
+    const deck = decks[0] as FakeAudio;
+    deck.loadMetadata();
+    expect(deck.currentTime).toBe(120);
+  });
+
+  it("seeks again when the audio plays from elsewhere anyway", () => {
+    const { engine, decks } = setup({ loaded: false });
+    engine.restoreQueue({ tracks, originalOrder: null, index: 0, position: 1234 });
+    const deck = decks[0] as FakeAudio;
+    deck.loadMetadata();
+    void deck.play();
+    deck.advance(0.3); // dropped
+    expect(deck.currentTime).toBe(1234); // sought again
+    expect(engine.getSnapshot().position).toBe(1234);
+    deck.advance(1234.4);
+    deck.advance(1236);
+    expect(engine.getSnapshot().position).toBe(1236);
+  });
+
+  it("seeks again when a seek stays pending while it plays", () => {
+    const { engine, decks, tick } = setup({ loaded: false });
+    engine.restoreQueue({ tracks, originalOrder: null, index: 0, position: 1234 });
+    const deck = decks[0] as FakeAudio;
+    deck.loadMetadata();
+    void deck.play();
+    expect(deck.seeks).toBe(1);
+    deck.seeking = true; // never completes, no timeupdate meanwhile
+    tick(1999);
+    expect(deck.seeks).toBe(1);
+    tick(1);
+    expect(deck.seeks).toBe(2); // asked again
+    expect(engine.getSnapshot().position).toBe(1234);
+  });
+
+  it("gives up on a start position the audio never reaches", () => {
+    const { engine, decks } = setup({ loaded: false });
+    engine.restoreQueue({ tracks, originalOrder: null, index: 0, position: 1234 });
+    const deck = decks[0] as FakeAudio;
+    deck.loadMetadata();
+    void deck.play();
+    for (let i = 0; i < 10; i++) deck.advance(i); // dropped every time
+    expect(engine.getSnapshot().position).toBe(9); // what really plays
+  });
+
+  it("seeks a track whose audio is not loaded yet (a bookmark resumed)", () => {
+    const { engine, decks } = setup({ loaded: false });
+    engine.restoreQueue({ tracks, originalOrder: null, index: 0, position: 0 });
+    engine.seek(500);
+    expect(engine.getSnapshot().position).toBe(500);
+    const deck = decks[0] as FakeAudio;
+    deck.loadMetadata();
+    void deck.play();
+    expect(deck.currentTime).toBe(500);
+  });
+
+  it("seeks at once once loaded", () => {
+    const { engine, decks } = setup({ loaded: false });
+    engine.restoreQueue({ tracks, originalOrder: null, index: 0, position: 0 });
+    const deck = decks[0] as FakeAudio;
+    deck.loadMetadata();
+    engine.seek(42); // paused: the user's own seek
+    expect(deck.currentTime).toBe(42);
+    expect(engine.getSnapshot().position).toBe(42);
+  });
+
+  it("forgets a pending position when another track is loaded", () => {
+    const { engine, decks } = setup({ loaded: false });
+    engine.restoreQueue({ tracks, originalOrder: null, index: 0, position: 300 });
+    engine.next();
+    expect(engine.getSnapshot().position).toBe(0);
+    const deck = decks[0] as FakeAudio;
+    deck.loadMetadata();
+    expect(deck.currentTime).toBe(0);
   });
 });
 

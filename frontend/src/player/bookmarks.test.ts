@@ -27,6 +27,18 @@ function keeper() {
   return { calls, kept };
 }
 
+/** With `started` too (the web player follows bookmarks across devices). */
+function followingKeeper() {
+  const calls: string[] = [];
+  const kept = createBookmarkKeeper({
+    save: (track, seconds) => calls.push(`save ${track.id} ${seconds}`),
+    remove: (track) => calls.push(`remove ${track.id}`),
+    resume: (track) => calls.push(`resume ${track.id}`),
+    started: (track) => calls.push(`started ${track.id}`),
+  });
+  return { calls, kept };
+}
+
 describe("bookmark keeper", () => {
   it("resumes long-form tracks started from their beginning, not music", () => {
     const { calls, kept } = keeper();
@@ -61,5 +73,27 @@ describe("bookmark keeper", () => {
     kept.update(snapshot(SONG, 2, 100, true));
     kept.update(snapshot(SONG, 2, 120, false));
     expect(calls).toEqual(["remove book"]);
+  });
+});
+
+describe("bookmark keeper, followed across devices", () => {
+  it("tells when a long-form track becomes current, however it started, before resuming", () => {
+    const { calls, kept } = followingKeeper();
+    kept.update(snapshot(SONG, 1, 0, true));
+    kept.update(snapshot(BOOK, 2, 0, true));
+    kept.update(snapshot(BOOK, 3, 600, false)); // restored far in
+    kept.update({ ...snapshot(BOOK, 4, 0, true), positioned: true }); // a chosen chapter
+    // (The restored one is saved as it leaves, as before.)
+    expect(calls).toEqual(["started book", "resume book", "started book", "save book 600", "started book"]);
+  });
+
+  it("does not save what it had once moved to another device's position", () => {
+    const { calls, kept } = followingKeeper();
+    kept.update(snapshot(BOOK, 1, 0, true));
+    kept.update(snapshot(BOOK, 1, 120, true)); // saved at 120
+    kept.forget(); // moved (paused) to 3000 s, where another device left it
+    kept.update(snapshot(BOOK, 1, 3000, false)); // not "paused at 120": nothing saved
+    kept.leave(); // from where it moved to
+    expect(calls).toEqual(["started book", "resume book", "save book 120", "started book", "save book 3000"]);
   });
 });

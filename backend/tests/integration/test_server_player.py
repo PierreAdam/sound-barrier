@@ -52,7 +52,6 @@ async def test_start_configure_and_stop(app: FastAPI, user: SubsonicUser) -> Non
         ).status_code == 404
         lyrics = await web.get(f"/api/stream/{key}/lyrics", params={"song": not_queued})
         assert lyrics.status_code == 404
-        assert player["receiverAppId"] is None
 
         assert (await web.get("/api/stream/not-a-key")).status_code == 404
         assert (await web.delete("/api/server-player")).status_code == 204
@@ -77,22 +76,13 @@ async def test_it_only_plays_the_users_songs(
     assert players.of(user_id) is None
 
 
-async def test_the_cast_receiver_app_id_is_a_setting(
-    app: FastAPI, admin: SubsonicUser, user: SubsonicUser
-) -> None:
-    async with signed_in(app, admin) as web:
-        bad = await web.put("/api/external/settings", json={"castReceiverAppId": "not-an-id"})
-        assert bad.status_code == 400
-        saved = await web.put("/api/external/settings", json={"castReceiverAppId": " 1a2b3c4d "})
-        assert saved.json()["castReceiverAppId"] == "1A2B3C4D"
+async def test_dashcast_is_a_setting(app: FastAPI, admin: SubsonicUser, user: SubsonicUser) -> None:
     async with signed_in(app, user) as web:
         player = (await web.post("/api/server-player")).json()
-        assert player["receiverAppId"] == "1A2B3C4D"  # what their Cast button uses
-        assert player["dashcast"] is True  # allowed by default
+        assert player["dashcast"] is True  # allowed by default: what their Cast button offers
+        assert "receiverAppId" not in player  # no receiver of our own to register any more
         await web.delete("/api/server-player")
     async with signed_in(app, admin) as web:
-        cleared = await web.put("/api/external/settings", json={"castReceiverAppId": ""})
-        assert cleared.json()["castReceiverAppId"] is None
         off = await web.put("/api/external/settings", json={"dashcast": False})
         assert off.json()["dashcast"] is False
         await web.put("/api/external/settings", json={"dashcast": True})

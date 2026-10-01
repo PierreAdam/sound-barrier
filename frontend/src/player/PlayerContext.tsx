@@ -10,6 +10,7 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import { api, type CheckedBookmark, type SyncedBookmark } from "../api/native";
 import { coverVersion } from "../api/coverVersions";
 import type { SubsonicClient } from "../api/subsonic";
 import { useSession } from "../auth/AuthContext";
@@ -17,14 +18,19 @@ import { usePreferences } from "../preferences/PreferencesContext";
 import { SCREEN_TARGET, screenLink } from "../cast/tv/screenLink";
 import { remoteLink } from "../remote/link";
 import { type PlayerMode, playHere, usePlayerMode } from "../remote/mode";
+import { deviceName } from "../remote/protocol";
 import { RemoteController } from "../remote/RemoteController";
-import { resumeAudio } from "./audioGraph";
+import { resumeAudio, suspendAudio } from "./audioGraph";
+import { traceAudio } from "./audioTrace";
+import { bookOf, CHECK_EVERY_MS, moveFor } from "./bookmarkSync";
 import { createBookmarkKeeper, RESUME_FROM_S, FINISHED_S, STARTED_S } from "./bookmarks";
 import type { PlayerController } from "./controller";
-import { PlayerEngine, type PlayerSnapshot } from "./engine";
+import { PlayerEngine, type PlayerSnapshot, type QueueState, type Track } from "./engine";
 import { createScrobbler } from "./scrobble";
 import { SEEK_STEP_S, shortcutFor } from "./shortcuts";
 import { useWebQueue } from "./useWebQueue";
+
+import { songToTrack } from "./tracks";
 
 export type { Track } from "./engine";
 export { songToTrack } from "./tracks";
@@ -42,19 +48,33 @@ export type RemotePlayer = Extract<PlayerMode, { kind: "remote" }>;
 
 const PlayerContext = createContext<PlayerValue | null>(null);
 
-/** "Resumed at 12:34": shown by the player bar after an audiobook / podcast resumed. */
+/**
+ * Shown by the player bar: "Resumed at 12:34" after an audiobook / podcast resumed, or,
+ * `from` another device, where the player moved (useBookmarks).
+ */
 export interface ResumeNotice {
   trackId: string;
   seconds: number;
+  from?: {
+    source: string | null; // e.g. "Chrome on Android"
+    changedAt: string;
+    tookOver: boolean; // it was playing here, and is now playing there: paused here
+  };
 }
 
 interface ResumeValue {
   notice: ResumeNotice | null;
   startOver(): void;
+  undo(): void;
   dismiss(): void;
 }
 
-const ResumeContext = createContext<ResumeValue>({ notice: null, startOver: () => undefined, dismiss: () => undefined });
+const ResumeContext = createContext<ResumeValue>({
+  notice: null,
+  startOver: () => undefined,
+  undo: () => undefined,
+  dismiss: () => undefined,
+});
 
 export function useResumeNotice(): ResumeValue {
   return useContext(ResumeContext);
@@ -79,6 +99,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       new PlayerEngine({
         streamUrl: (id) => clientRef.current.url("stream", { id }),
         storage: safeLocalStorage(),
+        trace: traceAudio,
       }),
     [],
   );
@@ -95,7 +116,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useWebQueue(engine);
   useScrobbling(engine, client);
   useAudioResume(engine);
-  const resume = useBookmarks(engine, client);
+  const resume = useBookmarks(engine);
   // The keyboard drives what the player bar shows.
   useShortcuts(active);
   const value = useMemo(() => ({ local: engine, active, mode }), [engine, active, mode]);
@@ -212,37 +233,165 @@ const NOTICE_MS = 12000;
 /**
  * Audiobooks and podcasts: their position is saved as a bookmark (every few seconds, on
  * pause, on track change, when the page closes) and they resume there when played again.
+ *
+ * Followed across devices (see services/bookmarks.py): the latest bookmark of the book is
+ * checked when it becomes the current track, every CHECK_EVERY_MS, when the tab is back in
+ * front and when it starts playing here. When another device moved it, this player moves
+ * there: paused, it stays paused; playing, it pauses (the other device took over), unless
+ * it just started playing here, then it takes over (it moves there and plays on). Saves
+ * say which bookmark they follow: one made from an outdated position is refused.
  */
-function useBookmarks(engine: PlayerEngine, client: SubsonicClient): ResumeValue {
-  const clientRef = useRef(client);
-  clientRef.current = client;
+function useBookmarks(engine: PlayerEngine): ResumeValue {
   const [notice, setNotice] = useState<ResumeNotice | null>(null);
+  // The latest bookmark this tab knows, of the current track's book.
+  const seen = useRef<{ book: string; changedAt: string | null } | null>(null);
+  // Saves in flight, and answered: a check answered meanwhile may be about our own save.
+  const saving = useRef(0);
+  const answered = useRef(0);
+  // The track that started from its beginning (the keeper's `resume`): resumed when known.
+  const resumeWanted = useRef<string | null>(null);
+  const before = useRef<QueueState | null>(null); // for "Undo"
+  const keeperRef = useRef<ReturnType<typeof createBookmarkKeeper> | null>(null);
+  const source = useMemo(() => deviceName(), []);
+
+  const seenFor = useCallback(
+    (track: Track) => (seen.current?.book === bookOf(track) ? seen.current.changedAt : null),
+    [],
+  );
+  const know = useCallback((track: Track, bookmark: SyncedBookmark | null) => {
+    seen.current = { book: bookOf(track), changedAt: bookmark?.changedAt ?? null };
+  }, []);
+
+  /** To where another device left the current book: `follow` (it moved there), or
+   * `takeOver` (playback just started here: it plays on there). */
+  const moveTo = useCallback(
+    (bookmark: SyncedBookmark, how: "follow" | "takeOver") => {
+      const state = engine.getSnapshot();
+      const current = state.current;
+      if (!current?.longForm) return;
+      seen.current = { book: bookOf(current), changedAt: bookmark.changedAt };
+      const move = moveFor(bookmark, current, engine.currentTime, state.queue, state.index);
+      if (move.kind === "none") return;
+      const wasPlaying = state.playing;
+      before.current = engine.exportQueue();
+      keeperRef.current?.forget(); // what this player had is not saved over it
+      if (wasPlaying && how === "follow") engine.pause();
+      const shown: ResumeNotice = {
+        trackId: move.kind === "seek" ? current.id : bookmark.songId,
+        seconds: move.seconds,
+        from: { source: bookmark.source, changedAt: bookmark.changedAt, tookOver: wasPlaying && how === "follow" },
+      };
+      const restore = (queue: QueueState) => {
+        engine.restoreQueue(queue);
+        if (how === "takeOver" && wasPlaying) engine.togglePlay();
+      };
+      if (move.kind === "seek") engine.seek(move.seconds);
+      else if (move.kind === "queue") restore({ ...engine.exportQueue(), index: move.index, position: move.seconds });
+      else {
+        // Not queued: the book from that file on, as its page plays it.
+        if (!current.albumId) return;
+        void api
+          .getSpokenShow(current.albumId)
+          .then(({ episodes }) => {
+            const from = episodes.findIndex((e) => e.id === move.songId);
+            if (from < 0) return;
+            const tracks = episodes.slice(from).map(songToTrack);
+            const shuffled = engine.getSnapshot().shuffle; // the music's shuffle setting stays
+            restore({ tracks, originalOrder: shuffled ? tracks.map((_, i) => i) : null, index: 0, position: move.seconds });
+            setNotice(shown);
+          })
+          .catch(() => undefined);
+        return;
+      }
+      setNotice(shown);
+    },
+    [engine],
+  );
+
+  /** After a save or a removal: known, or refused (another device moved on: follow it). */
+  const settle = useCallback(
+    (track: Track, request: Promise<CheckedBookmark>) => {
+      saving.current++;
+      void request
+        .then((result) => {
+          if (result.saved) know(track, result.bookmark);
+          else if (result.bookmark && sameBook(engine, track)) moveTo(result.bookmark, "follow");
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          saving.current--;
+          answered.current++;
+        });
+    },
+    [engine, know, moveTo],
+  );
+
+  const save = useCallback(
+    (track: Track, seconds: number, keepalive?: boolean) =>
+      settle(
+        track,
+        api.saveBookmark(track.id, { positionMs: Math.round(seconds * 1000), seen: seenFor(track), source }, keepalive),
+      ),
+    [settle, seenFor, source],
+  );
+
+  /** Playing here (just started): this device has the book now. */
+  const claim = useCallback(() => {
+    const state = engine.getSnapshot();
+    if (state.current?.longForm && state.playing) save(state.current, Math.max(engine.currentTime, 0));
+  }, [engine, save]);
+
   const keeper = useMemo(
     () =>
       createBookmarkKeeper({
-        save: (track, seconds, keepalive) =>
-          void clientRef.current
-            .call("createBookmark", { id: track.id, position: String(Math.round(seconds * 1000)) }, { keepalive })
-            .catch(() => undefined),
-        remove: (track, keepalive) =>
-          void clientRef.current.call("deleteBookmark", { id: track.id }, { keepalive }).catch(() => undefined),
-        // The latest bookmark (another device may have moved it), then resume if still at the start.
-        resume: (track) =>
-          void clientRef.current
-            .call("getSong", { id: track.id })
-            .then(({ song }) => {
-              const seconds = (song.bookmarkPosition ?? 0) / 1000;
-              const duration = song.duration ?? track.durationSeconds ?? 0;
-              const current = engine.getSnapshot();
-              if (current.current?.id !== track.id || engine.currentTime >= STARTED_S) return;
-              if (seconds < RESUME_FROM_S || (duration && seconds >= duration - FINISHED_S)) return;
-              engine.seek(seconds);
-              setNotice({ trackId: track.id, seconds });
+        save,
+        remove: (track, keepalive) => settle(track, api.removeBookmark(track.id, seenFor(track), keepalive)),
+        // Became current: the latest bookmark of its book, then resume or move there.
+        started: (track) => {
+          resumeWanted.current = null;
+          const { playing, positioned } = engine.getSnapshot();
+          void api
+            .getLatestBookmark(track.id, null)
+            .then(({ bookmark }) => {
+              if (engine.getSnapshot().current?.id !== track.id) return;
+              know(track, bookmark);
+              if (bookmark?.songId === track.id) {
+                if (resumeWanted.current === track.id) resumeAt(engine, track, bookmark, setNotice);
+              } else if (bookmark && !playing && !positioned) {
+                // In another file of the book, and this one was not chosen (a restored queue).
+                moveTo(bookmark, "follow");
+              }
+              claim();
             })
-            .catch(() => undefined),
+            .catch(() => undefined);
+        },
+        resume: (track) => {
+          resumeWanted.current = track.id;
+        },
       }),
-    [engine],
+    [engine, save, settle, seenFor, know, moveTo, claim],
   );
+  keeperRef.current = keeper;
+
+  /** Has another device moved the current book's bookmark? (`takeOver`: just started here.) */
+  const check = useCallback(
+    (how: "follow" | "takeOver") => {
+      const current = engine.getSnapshot().current;
+      if (!current?.longForm || saving.current > 0 || seen.current?.book !== bookOf(current)) return;
+      const asked = answered.current;
+      void api
+        .getLatestBookmark(current.id, seen.current.changedAt)
+        .then(({ bookmark, moved }) => {
+          if (answered.current !== asked || saving.current > 0) return; // maybe our own save
+          if (engine.getSnapshot().current?.id !== current.id) return;
+          if (moved && bookmark) moveTo(bookmark, how);
+          if (how === "takeOver") claim();
+        })
+        .catch(() => undefined);
+    },
+    [engine, moveTo, claim],
+  );
+
   const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
   useEffect(() => keeper.update(state), [keeper, state]);
   useEffect(() => {
@@ -250,6 +399,24 @@ function useBookmarks(engine: PlayerEngine, client: SubsonicClient): ResumeValue
     window.addEventListener("pagehide", leave);
     return () => window.removeEventListener("pagehide", leave);
   }, [keeper]);
+  // Every 30 s (hidden too: it may be playing in the background), and back in front.
+  useEffect(() => {
+    const follow = () => check("follow");
+    const onVisible = () => document.visibilityState === "visible" && follow();
+    const timer = window.setInterval(follow, CHECK_EVERY_MS);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", follow);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", follow);
+    };
+  }, [check]);
+  // Started playing here: from where the book is now, and this device has it.
+  const playing = state.playing;
+  useEffect(() => {
+    if (playing) check("takeOver");
+  }, [playing, check]);
   // The notice goes after a while, or with its track.
   useEffect(() => {
     if (!notice) return;
@@ -265,8 +432,33 @@ function useBookmarks(engine: PlayerEngine, client: SubsonicClient): ResumeValue
     engine.seek(0);
     setNotice(null);
   }, [engine]);
+  // Back to where this player was (it then saves from there: the user chose it).
+  const undo = useCallback(() => {
+    const queue = before.current;
+    before.current = null;
+    setNotice(null);
+    if (!queue) return;
+    keeperRef.current?.forget();
+    engine.restoreQueue(queue);
+  }, [engine]);
   const dismiss = useCallback(() => setNotice(null), []);
-  return useMemo(() => ({ notice, startOver, dismiss }), [notice, startOver, dismiss]);
+  return useMemo(() => ({ notice, startOver, undo, dismiss }), [notice, startOver, undo, dismiss]);
+}
+
+/** `track` is of the current track's book. */
+function sameBook(engine: PlayerEngine, track: Track): boolean {
+  const current = engine.getSnapshot().current;
+  return current !== null && bookOf(current) === bookOf(track);
+}
+
+/** Started from its beginning: at its bookmark, when worth it ("Resumed at 12:34"). */
+function resumeAt(engine: PlayerEngine, track: Track, bookmark: SyncedBookmark, notify: (notice: ResumeNotice) => void) {
+  const seconds = bookmark.positionMs / 1000;
+  const duration = track.durationSeconds ?? 0;
+  if (engine.currentTime >= STARTED_S) return;
+  if (seconds < RESUME_FROM_S || (duration && seconds >= duration - FINISHED_S)) return;
+  engine.seek(seconds);
+  notify({ trackId: track.id, seconds });
 }
 
 /** Space: play / pause; ← / →: 10 s back / forward (see shortcuts.ts for when they apply). */
@@ -288,11 +480,12 @@ function useShortcuts(engine: PlayerController): void {
   }, [engine]);
 }
 
-/** Playing again after the tab slept: the visualizers' AudioContext must run too. */
+/** The visualizers' AudioContext runs while playing (also after the tab slept), and only then. */
 function useAudioResume(engine: PlayerEngine): void {
   const playing = useSyncExternalStore(engine.subscribe, () => engine.getSnapshot().playing);
   useEffect(() => {
     if (playing) resumeAudio();
+    else suspendAudio();
   }, [playing]);
 }
 
@@ -337,8 +530,9 @@ function useMediaSession(engine: PlayerEngine, client: SubsonicClient): void {
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
     const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
-      ["play", () => engine.togglePlay()],
-      ["pause", () => engine.togglePlay()],
+      // Not toggles: a "pause" sent while already paused (the OS may) must not play.
+      ["play", () => !engine.getSnapshot().playing && engine.togglePlay()],
+      ["pause", () => engine.pause()],
       ["previoustrack", () => engine.previous()],
       ["nexttrack", () => engine.next()],
       ["seekto", (details) => details.seekTime !== undefined && engine.seek(details.seekTime)],

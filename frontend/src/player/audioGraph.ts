@@ -38,3 +38,10 @@ export function analyserFor(engine: PlayerController): AnalyserNode | null {
 export function resumeAudio(): void {
   if (graph?.context.state === "suspended") void graph.context.resume();
 }
+
+/** Paused: the AudioContext stops too. Left running, Chrome on Android replayed its last
+ * buffer when its audio output restarted (e.g. after switching apps): the moment paused,
+ * heard again. Resumed on play (resumeAudio). */
+export function suspendAudio(): void {
+  if (graph?.context.state === "running") void graph.context.suspend();
+}

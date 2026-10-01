@@ -15,6 +15,8 @@ export interface BookmarkActions {
   remove(track: Track, keepalive?: boolean): void;
   /** A long-form track just started from its beginning: resume it if it has a bookmark. */
   resume(track: Track): void;
+  /** A long-form track became the current one (however it started): before `resume`. */
+  started?(track: Track): void;
 }
 
 interface Playing {
@@ -45,6 +47,7 @@ export function createBookmarkKeeper(actions: BookmarkActions) {
       if (key !== last.key) {
         persist(last); // the previous track: where it was left (or finished)
         last = { key, track, position: state.position, duration: state.duration, playing: state.playing, savedAt: -1 };
+        if (track?.longForm) actions.started?.(track);
         // Not when it was started at a chosen place (a chapter).
         if (track?.longForm && state.position < STARTED_S && !state.positioned) actions.resume(track);
         return;
@@ -63,6 +66,10 @@ export function createBookmarkKeeper(actions: BookmarkActions) {
     /** The page is closing: save where the current track is. */
     leave(): void {
       persist(last, true);
+    },
+    /** The player is moved to where another device left it: what it had is not saved. */
+    forget(): void {
+      last = { key: null, track: null, position: 0, duration: 0, playing: false, savedAt: -1 };
     },
   };
 }

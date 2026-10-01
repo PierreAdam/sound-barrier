@@ -15,6 +15,8 @@ class FakeAudio implements AudioLike {
   volume = 1;
   muted = false;
   paused = true;
+  readyState = 4;
+  seeking = false;
   private listeners = new Map<string, Set<() => void>>();
 
   play(): Promise<void> {

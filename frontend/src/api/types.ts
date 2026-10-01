@@ -125,6 +125,8 @@ export interface Child {
   mediaType?: "song" | "audiobook" | "podcast"; // OpenSubsonic
   bookmarkPosition?: number; // ms: where the user stopped (audiobooks, podcasts)
   chapters?: { startMs: number; title: string }[]; // inside the file (our /api only, audiobooks)
+  // Where the file is in its audiobook (our /api only): see BookPlace in player/engine.ts.
+  book?: { startMs: number; durationMs: number; chapter: number; chapters: number };
 }
 
 /** Payload of each method, keyed by method name. */

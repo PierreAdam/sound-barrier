@@ -33,7 +33,7 @@ async def create_bookmark(ctx: SubsonicContext) -> Payload:
     song_id = browsing.parse_id(ctx.params.require("id"))
     position = ctx.params.require_int("position")
     if song_id is None or not await bookmarks.save(
-        ctx.session, ctx.user, song_id, position, ctx.params.get("comment")
+        ctx.session, ctx.user, song_id, position, ctx.params.get("comment"), ctx.client
     ):
         raise SubsonicError.not_found("Song")
     return None

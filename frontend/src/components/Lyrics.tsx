@@ -130,6 +130,9 @@ export function Lyrics({ songId, emptyText = "No lyrics found for this song." }:
   const manualUntil = useRef(0);
   // Where the current line was (offsetTop), to keep it in place when the window moves.
   const activeTop = useRef<number | null>(null);
+  // The lyrics the view was placed for: new ones (the next song) are placed at once, not
+  // glided to from where the previous song's were (the same box: its lines flew by).
+  const placedFor = useRef<Lines | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -187,10 +190,17 @@ export function Lyrics({ songId, emptyText = "No lyrics found for this song." }:
       }
 
       const line = index >= 0 ? list.current?.children[index - startRef.current] : null;
-      if (box && line instanceof HTMLElement && Date.now() >= manualUntil.current) {
-        const target = line.offsetTop + line.offsetHeight / 2 - box.clientHeight / 2;
+      const target = line instanceof HTMLElement && box ? line.offsetTop + line.offsetHeight / 2 - box.clientHeight / 2 : null;
+      if (box && placedFor.current !== synced) {
+        // New lyrics: at the current line, or at the top before the first one.
+        placedFor.current = synced;
+        box.scrollTop = target ?? 0;
+      } else if (box && target !== null && Date.now() >= manualUntil.current) {
         const gap = target - box.scrollTop;
-        if (Math.abs(gap) > 0.5) box.scrollTop += gap * (1 - Math.exp(-elapsed / SCROLL_EASING_MS));
+        const step = gap * (1 - Math.exp(-elapsed / SCROLL_EASING_MS));
+        // At least a pixel: the browser rounds the scroll to device pixels, smaller steps
+        // were lost and the glide stopped a few pixels short of the middle.
+        if (Math.abs(gap) > 0.5) box.scrollTop += Math.abs(step) < 1 ? Math.sign(gap) * Math.min(Math.abs(gap), 1) : step;
       }
 
       wordElements.current.forEach((element, i) => {

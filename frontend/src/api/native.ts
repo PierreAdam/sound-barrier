@@ -387,7 +387,6 @@ export interface ServerPlayerInfo {
   streamUrl: string;
   listeners: number;
   alwaysOn: boolean; // plays even when nobody listens (a radio)
-  receiverAppId: string | null; // our own Now playing receiver on Chromecasts (null: none)
   dashcast: boolean; // without it: that screen through DashCast (a third party's receiver)
 }
 
@@ -424,7 +423,6 @@ export interface ExternalSettings {
   audibleRegions: string[];
   openLibrary: boolean;
   itunes: boolean;
-  castReceiverAppId: string | null; // the "Now playing" screen on Chromecasts
   dashcast: boolean; // without it: that screen through DashCast (a third party's receiver)
 }
 
@@ -439,7 +437,6 @@ export interface ExternalSettingsUpdate {
   audibleRegion?: string;
   openLibrary?: boolean;
   itunes?: boolean;
-  castReceiverAppId?: string; // "" removes it
   dashcast?: boolean;
 }
 
@@ -683,6 +680,24 @@ export interface SpokenShowData {
   genre: string | null;
 }
 
+/** Where the user is in a book (any of its files) or a podcast episode, and who moved it. */
+export interface SyncedBookmark {
+  songId: string;
+  positionMs: number;
+  changedAt: string; // sent back as `seen`, as given
+  source: string | null; // e.g. "Chrome on Android", or a Subsonic app's name
+}
+
+export interface LatestBookmark {
+  bookmark: SyncedBookmark | null;
+  moved: boolean; // saved by someone after `seen`
+}
+
+export interface CheckedBookmark {
+  saved: boolean; // false: refused, someone saved after `seen` (`bookmark` is theirs)
+  bookmark: SyncedBookmark | null; // the latest, after the change when saved
+}
+
 /** A file of a book / show in "Edit details": its title and the chapters inside it. */
 export interface SpokenFileDetails {
   id: string;
@@ -847,6 +862,21 @@ export const api = {
   getSections: () => request<Record<SpokenKind, boolean>>("GET", "/library/sections"),
   getSpokenPage: (kind: SpokenKind) => request<SpokenPage>("GET", `/spoken/${kind}`),
   getSpokenShow: (id: string) => request<SpokenShowData>("GET", `/spoken/shows/${id}`),
+  // Bookmarks followed across devices (`seen`: the `changedAt` last known, as given).
+  getLatestBookmark: (songId: string, seen: string | null) =>
+    request<LatestBookmark>(
+      "GET",
+      `/bookmarks/latest?${new URLSearchParams(seen ? { song: songId, seen } : { song: songId }).toString()}`,
+    ),
+  saveBookmark: (songId: string, body: { positionMs: number; seen: string | null; source: string }, keepalive?: boolean) =>
+    request<CheckedBookmark>("PUT", `/bookmarks/${songId}`, body, { keepalive }),
+  removeBookmark: (songId: string, seen: string | null, keepalive?: boolean) =>
+    request<CheckedBookmark>(
+      "DELETE",
+      `/bookmarks/${songId}${seen ? `?${new URLSearchParams({ seen }).toString()}` : ""}`,
+      undefined,
+      { keepalive },
+    ),
   getSpokenDetails: (id: string) => request<SpokenDetails>("GET", `/spoken/shows/${id}/details`),
   /** Returns the show's / book's id afterwards (it changes with its title). */
   setSpokenDetails: (id: string, details: SpokenDetails) =>

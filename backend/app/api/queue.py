@@ -14,7 +14,7 @@ from pydantic import Field
 
 from app.api.deps import ApiModel, CurrentCaller, DbSession
 from app.api.songs import web_song
-from app.services import web_queue
+from app.services import spoken, web_queue
 
 router = APIRouter(prefix="/queue", tags=["queue"])
 
@@ -52,9 +52,10 @@ async def get_queue(
         queue = await web_queue.get(session, caller.user, player)
     except web_queue.PlayerNotFoundError as error:
         raise _not_found(error) from None
+    places = await spoken.book_places_of(session, caller.user, queue.songs)
     return QueueOut(
         revision=queue.revision,
-        songs=[web_song(entry) for entry in queue.songs],
+        songs=[web_song(entry, places.get(entry.song.id)) for entry in queue.songs],
         original_order=queue.original_order,
         current_index=queue.current_index,
         position_ms=queue.position_ms,

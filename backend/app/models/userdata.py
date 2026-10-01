@@ -168,6 +168,8 @@ class Bookmark(Base):
     comment: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     changed_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    # Who moved it last: a browser ("Chrome on Android") or a Subsonic app (its name).
+    source: Mapped[str | None]
 
 
 class PlayHistory(Base):

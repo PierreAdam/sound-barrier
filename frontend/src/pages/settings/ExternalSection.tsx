@@ -191,16 +191,6 @@ export function ExternalSection() {
         />
         iTunes (podcasts: show name, author, artwork; no key needed)
       </label>
-      <CastReceiverField
-        appId={settings.castReceiverAppId}
-        busy={busy}
-        onSave={(appId) =>
-          save(
-            { castReceiverAppId: appId },
-            appId ? "Cast receiver saved: casting shows Now playing on the TV." : "Cast receiver removed.",
-          )
-        }
-      />
       <label className="checkbox">
         <input
           type="checkbox"
@@ -209,73 +199,18 @@ export function ExternalSection() {
           onChange={(e) =>
             void save(
               { dashcast: e.target.checked },
-              e.target.checked ? "DashCast turned on." : "DashCast turned off: without a receiver of your own, sound only.",
+              e.target.checked
+                ? "DashCast turned on."
+                : "DashCast turned off: casting the server player is sound only, or “Cast from this computer”.",
             )
           }
         />
-        DashCast (without a receiver of your own: the Now playing screen on the TV through this published receiver, a
-        third party&apos;s, which is given the screen&apos;s address with the stream&apos;s key; “Cast from this computer”
-        stays private)
+        DashCast (casting the server player with its Now playing screen on the TV, through this published receiver: a
+        third party&apos;s, given the screen&apos;s address with the stream&apos;s key. Off: “Cast audio only” and “Cast
+        from this computer” stay on the local network)
       </label>
       {message &&<p className={message.ok ? "text-success" : "text-error"}>{message.text}</p>}
     </section>
-  );
-}
-
-/**
- * The Google Cast app of Sound-Barrier's receiver: the server player's Now playing screen
- * on the TV. Registered by whoever hosts the page (receiver.html, served by this server).
- */
-function CastReceiverField({
-  appId,
-  busy,
-  onSave,
-}: {
-  appId: string | null;
-  busy: boolean;
-  onSave(appId: string): Promise<boolean>;
-}) {
-  const [value, setValue] = useState(appId ?? "");
-  useEffect(() => setValue(appId ?? ""), [appId]);
-  const receiverUrl = `${window.location.origin}/cast/receiver.html`;
-
-  function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    void onSave(value.trim());
-  }
-
-  return (
-    <form className="folder-form" onSubmit={onSubmit}>
-      <label className="field">
-        <span className="field__label">
-          Cast receiver (Now playing on the TV){" "}
-          {appId ? <span className="badge">configured</span> : <span className="text-muted">(sound only)</span>}
-        </span>
-        <div className="folder-form__row">
-          <input
-            className="field__input"
-            placeholder="Application id, e.g. 1A2B3C4D"
-            value={value}
-            maxLength={8}
-            onChange={(e) => setValue(e.target.value)}
-          />
-          <button className="button button--primary" type="submit" disabled={busy || value.trim() === (appId ?? "")}>
-            Save
-          </button>
-          {appId && (
-            <button className="button" type="button" disabled={busy} onClick={() => void onSave("")}>
-              Remove
-            </button>
-          )}
-        </div>
-      </label>
-      <p className="text-muted">
-        Casting the server player to a Chromecast then shows its cover, progress and lyrics on the TV. Register a
-        “Custom Receiver” in the Google Cast SDK Developer Console with the URL <code>{receiverUrl}</code> (or where you
-        host a copy of it), then its id here. Until the app is published, only the Chromecasts registered there for
-        testing can show it; the others cast the sound only (“▾” next to Cast).
-      </p>
-    </form>
   );
 }
 

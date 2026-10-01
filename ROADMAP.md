@@ -131,12 +131,10 @@ Decisions taken on what is left to do (2026-09-28). The design of what exists is
     Chromecast from the web UI or opened in VLC / a radio app; a remote control target like
     a tab; "play even when nobody listens". Later: scrobbles and bookmarks of what it plays,
     its stream key kept across restarts, several per user (tied to the Players).
-    The TV's Now playing screen (`frontend/public/cast/`) works today through DashCast
-    (a published receiver) or mirrored by Chrome from the computer. Later: our own Google
-    Cast app (Cast SDK Developer Console, $5 once, "Custom Receiver" with
-    `https://<server>/cast/receiver.html`, the Chromecast's serial as test device; its id in
-    Settings → External services), then published with the page hosted once (e.g. GitHub
-    Pages), so no third party is involved.
+    The TV's Now playing screen (`frontend/public/cast/`) goes through DashCast (a
+    published receiver) or is mirrored by Chrome from the computer; "Cast audio only" and
+    the browser's tab cast stay local. No Cast app of our own (dropped: nothing it adds
+    that these do not cover, and a Google registration for every server).
 
 ## Maybe later
 

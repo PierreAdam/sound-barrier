@@ -7,6 +7,7 @@ their bookmark (services/bookmarks.py).
 """
 
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -34,6 +35,44 @@ class Show:
     @property
     def latest(self) -> datetime | None:
         return max((e.song.file_mtime for e in self.episodes), default=None)
+
+
+@dataclass(frozen=True)
+class BookPlace:
+    """Where a file is in its audiobook: the player shows the book's progress with it."""
+
+    start_ms: int  # the book's files before this one
+    duration_ms: int  # the whole book
+    chapter: int  # the book's chapters before this file (a file without any counts as one)
+    chapters: int  # the book's chapters
+
+
+def book_places(show: Show) -> dict[uuid.UUID, BookPlace]:
+    """Each file of an audiobook, in its order (none for a podcast)."""
+    if show.kind != music_folders.AUDIOBOOKS:
+        return {}
+    total_ms = show.duration_ms
+    total_chapters = sum(max(len(e.song.chapters or []), 1) for e in show.episodes)
+    places: dict[uuid.UUID, BookPlace] = {}
+    start_ms = chapter = 0
+    for episode in show.episodes:
+        places[episode.song.id] = BookPlace(start_ms, total_ms, chapter, total_chapters)
+        start_ms += episode.song.duration_ms
+        chapter += max(len(episode.song.chapters or []), 1)
+    return places
+
+
+async def book_places_of(
+    session: AsyncSession, user: AppUser, entries: Iterable[SongEntry]
+) -> dict[uuid.UUID, BookPlace]:
+    """The places of these songs in their audiobooks (a queue's: other songs are left out)."""
+    albums = {e.album.id for e in entries if e.folder_kind == music_folders.AUDIOBOOKS}
+    places: dict[uuid.UUID, BookPlace] = {}
+    for album_id in albums:
+        book = await show(session, user, album_id)
+        if book:
+            places.update(book_places(book))
+    return places
 
 
 @dataclass

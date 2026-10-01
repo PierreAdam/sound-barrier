@@ -166,7 +166,9 @@ function PlaybackChoices({
             checked={on}
             onChange={(e) => {
               if (e.target.checked) {
-                playHere(); // controlling another player and being controlled: never both
+                // Controlling another player and being controlled: never both, but for this
+                // tab's TV page (the other devices then control the TV through this tab).
+                if (mode.kind === "remote" && mode.targetKind !== "screen") playHere();
                 enableRemoteTarget();
               } else {
                 disableRemoteTarget();
@@ -177,7 +179,8 @@ function PlaybackChoices({
         </label>
         <InfoTip label="About remote control">
           <p>
-            <strong>Remote control</strong>: makes this tab controllable from your other devices.
+            <strong>Remote control</strong>: makes this tab controllable from your other devices. Cast to a TV from here,
+            they control the TV.
           </p>
         </InfoTip>
       </div>

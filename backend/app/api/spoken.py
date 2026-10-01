@@ -90,7 +90,11 @@ async def spoken_page(kind: str, caller: CurrentCaller, session: DbSession) -> S
     found = await spoken.shows(session, caller.user, (kind,))
     return SpokenPageOut(
         continue_listening=[
-            ResumeOut(show=_show(r.show), episode=web_song(r.episode), changed_at=r.changed_at)
+            ResumeOut(
+                show=_show(r.show),
+                episode=web_song(r.episode, spoken.book_places(r.show).get(r.episode.song.id)),
+                changed_at=r.changed_at,
+            )
             for r in resumes
         ],
         shows=[_show(s) for s in found],
@@ -102,9 +106,10 @@ async def show_page(album_id: uuid.UUID, caller: CurrentCaller, session: DbSessi
     found = await spoken.show(session, caller.user, album_id)
     if found is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown show or book")
+    places = spoken.book_places(found)
     return ShowPageOut(
         show=_show(found),
-        episodes=[web_song(e) for e in found.episodes],
+        episodes=[web_song(e, places.get(e.song.id)) for e in found.episodes],
         description=found.album.description,
         genre=await spoken_details.genre_of(session, album_id),
     )

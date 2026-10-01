@@ -1,7 +1,7 @@
 // Where Google's Cast SDK is not there (phones): the browser's own way of playing a media
-// element on another device, the Remote Playback API. Chrome on Android casts to a
-// Chromecast with it, Safari (iPhone, Mac) to an AirPlay device. The device fetches the
-// stream itself, from the server; nothing plays on the phone.
+// element on another device. Chrome on Android casts to a Chromecast with the Remote
+// Playback API; Safari (iPhone, iPad, Mac) to an AirPlay device with its own AirPlay
+// picker (its Remote Playback API refuses a stream not loaded yet).
 //
 // And VLC, which casts a stream to a Chromecast itself: the only way from an iPhone.
 
@@ -10,9 +10,18 @@ interface RemotePlayback extends EventTarget {
   prompt(): Promise<void>;
 }
 
-type RemoteAudio = HTMLAudioElement & { remote?: RemotePlayback };
+/** Safari's own AirPlay picker (older than the Remote Playback API). */
+interface WebKitAirPlay {
+  webkitShowPlaybackTargetPicker?(): void;
+  readonly webkitCurrentPlaybackTargetIsWireless?: boolean;
+}
+
+type RemoteAudio = HTMLAudioElement & { remote?: RemotePlayback } & WebKitAirPlay;
 
 let audio: RemoteAudio | null = null;
+// Safari: the picker was closed without a device (it does not tell): stopped after this.
+const AIRPLAY_WAIT_MS = 60_000;
+const AIRPLAY_CHANGED = "webkitcurrentplaybacktargetiswirelesschanged";
 
 const isApple = () => /iPhone|iPad|Macintosh/.test(navigator.userAgent) && !/Chrome\/|CriOS/.test(navigator.userAgent);
 
@@ -36,8 +45,13 @@ export async function playOnDevice(url: string): Promise<boolean> {
     const element = audio;
     element.remote?.addEventListener("connect", () => void element.play().catch(() => undefined));
     element.remote?.addEventListener("disconnect", () => element.pause());
+    // Safari: AirPlay stopped (back on the iPad / iPhone): not played here.
+    element.addEventListener(AIRPLAY_CHANGED, () => !element.webkitCurrentPlaybackTargetIsWireless && element.pause());
   }
   if (audio.src !== url) audio.src = url;
+  // Safari: its AirPlay picker. Its `remote.prompt()` refuses an element that has not
+  // loaded the stream yet (NotSupportedError), and iPadOS / iOS load nothing before a tap.
+  if (isApple() && typeof audio.webkitShowPlaybackTargetPicker === "function") return airPlay(audio);
   if (!audio.remote) throw new Error("This browser cannot play on another device");
   try {
     await audio.remote.prompt();
@@ -51,8 +65,40 @@ export async function playOnDevice(url: string): Promise<boolean> {
   }
 }
 
+/**
+ * Safari: plays the stream muted (started in the tap: allowed) and opens the AirPlay
+ * picker; unmuted once on an AirPlay device. Safari does not tell when its picker closes
+ * without one: the muted stream then stops after a while. True at once: the picker is open.
+ */
+let airPlayWait: (() => void) | null = null;
+
+function airPlay(element: RemoteAudio): Promise<boolean> {
+  airPlayWait?.(); // an earlier picker left open: this one replaces it
+  element.muted = true;
+  void element.play().catch(() => undefined);
+  element.webkitShowPlaybackTargetPicker?.();
+  const finish = (chosen: boolean) => {
+    window.clearTimeout(timer);
+    element.removeEventListener(AIRPLAY_CHANGED, changed);
+    airPlayWait = null;
+    if (chosen) element.muted = false;
+    else element.pause();
+  };
+  const changed = () => element.webkitCurrentPlaybackTargetIsWireless && finish(true);
+  const timer = window.setTimeout(() => finish(false), AIRPLAY_WAIT_MS);
+  element.addEventListener(AIRPLAY_CHANGED, changed);
+  airPlayWait = () => {
+    window.clearTimeout(timer);
+    element.removeEventListener(AIRPLAY_CHANGED, changed);
+  };
+  if (element.webkitCurrentPlaybackTargetIsWireless) finish(true); // already on AirPlay
+  return Promise.resolve(true);
+}
+
 /** Stops what `playOnDevice` started. */
 export function stopDevice(): void {
+  airPlayWait?.();
+  airPlayWait = null;
   if (!audio) return;
   audio.pause();
   audio.removeAttribute("src");

@@ -1,8 +1,7 @@
 // Google Cast sender (Chrome / Edge only): tells a Chromecast to play a URL. The device
 // then fetches the stream itself, from the server; this page can close. The receiver is
 // Google's Default Media Receiver (the sound only: nothing to register or host), or
-// Sound-Barrier's own (public/cast/receiver.html: a "Now playing" screen on the TV), once
-// its Cast app id is set (Settings → External services).
+// DashCast, which opens the Now playing page (public/cast/receiver.html) on the TV.
 //
 // The SDK is loaded on first use. Only the few parts used here are declared (no npm types).
 
@@ -105,52 +104,33 @@ export function onCastState(listener: (state: CastState) => void): () => void {
 }
 
 /** Why a cast did not start, in words (the SDK rejects with an error code). */
-function castError(code: unknown, custom: boolean): Error | null {
+function castError(code: unknown): Error | null {
   const text = typeof code === "string" ? code : code instanceof Error ? code.message : String(code);
   if (text === "cancel") return null; // the picker closed, nothing chosen
-  if (custom && (text === "receiver_unavailable" || text === "session_error" || text === "timeout")) {
-    return new Error(
-      "This device could not open the Now playing screen (its Cast app not published yet, or this " +
-        "Chromecast not registered to test it): try “Cast audio only”",
-    );
-  }
   if (text === "receiver_unavailable") return new Error("No Cast device found on this network");
   return new Error(`Casting failed (${text})`);
 }
 
 /**
  * Asks the user for a device (Chrome's picker: call it from a click), then has it play
- * the live stream at `url`, on the receiver `appId` (Google's default one when not given:
- * the sound only). Returns the device's name, null when no device was chosen.
+ * the live stream at `url` on Google's default receiver (the sound only). Returns the
+ * device's name, null when no device was chosen.
  */
-export async function castStream(
-  url: string,
-  title: string,
-  subtitle: string,
-  appId: string = DEFAULT_RECEIVER,
-): Promise<string | null> {
+export async function castStream(url: string, title: string, subtitle: string): Promise<string | null> {
   const g = await loadCast();
   if (!g) throw new Error("Casting needs Chrome or Edge (not on iPhone), on an HTTPS page");
   const context = g.cast.framework.CastContext.getInstance();
-  // Another receiver: set up for it (the picker then lists the devices that can run it).
-  if (appId !== receiver) {
+  // Set up for DashCast before: back to the default receiver.
+  if (receiver !== DEFAULT_RECEIVER) {
     if (context.getCurrentSession()) context.endCurrentSession(true);
-    context.setOptions({ receiverApplicationId: appId, autoJoinPolicy: g.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED });
-    receiver = appId;
+    context.setOptions({ receiverApplicationId: DEFAULT_RECEIVER, autoJoinPolicy: g.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED });
+    receiver = DEFAULT_RECEIVER;
   }
   if (!context.getCurrentSession()) {
     try {
       await context.requestSession();
     } catch (e) {
-      // Back to the default receiver: the devices it lists are those of most casts.
-      if (appId !== DEFAULT_RECEIVER) {
-        context.setOptions({
-          receiverApplicationId: DEFAULT_RECEIVER,
-          autoJoinPolicy: g.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
-        });
-        receiver = DEFAULT_RECEIVER;
-      }
-      const error = castError(e, appId !== DEFAULT_RECEIVER);
+      const error = castError(e);
       if (error) throw error;
       return null;
     }
@@ -178,8 +158,7 @@ export function screenUrl(streamUrl: string): string {
 
 /**
  * The Now playing screen through DashCast: the Chromecast opens our page itself, which
- * plays the stream (no receiver of our own needed). Returns the device's name, null when
- * no device was chosen.
+ * plays the stream. Returns the device's name, null when no device was chosen.
  */
 export async function castScreenWithDashCast(streamUrl: string): Promise<string | null> {
   const g = await loadCast();

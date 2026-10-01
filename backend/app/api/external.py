@@ -1,6 +1,5 @@
 """External services: settings (admins) and artist information for the artist page."""
 
-import re
 import uuid
 from pathlib import Path
 from typing import Any
@@ -50,8 +49,7 @@ class ExternalSettingsOut(ApiModel):
     audible_regions: list[str]
     open_library: bool
     itunes: bool
-    cast_receiver_app_id: str | None  # the "Now playing" screen on Chromecasts
-    dashcast: bool  # without it: that screen through DashCast (a third party's receiver)
+    dashcast: bool  # the server player's Now playing screen on a Chromecast, through DashCast
 
 
 class ExternalSettingsIn(ApiModel):
@@ -65,7 +63,6 @@ class ExternalSettingsIn(ApiModel):
     audible_region: str | None = None
     open_library: bool | None = None
     itunes: bool | None = None
-    cast_receiver_app_id: str | None = None  # None keeps it, "" removes it
     dashcast: bool | None = None  # None keeps the current choice
 
 
@@ -81,7 +78,6 @@ def _settings_out(settings: server_settings.ExternalServices) -> ExternalSetting
         audible_regions=list(books.AUDIBLE_REGIONS),
         open_library=settings.open_library,
         itunes=settings.itunes,
-        cast_receiver_app_id=settings.cast_receiver_app_id,
         dashcast=settings.dashcast,
         picture_sources=[PictureSource(id="none", label="None")]
         + [
@@ -152,14 +148,6 @@ async def set_external_settings(
         value = getattr(body, name)
         if value is not None:
             setattr(settings, name, value)
-    if body.cast_receiver_app_id is not None:
-        app_id = body.cast_receiver_app_id.strip().upper()
-        if app_id and not re.fullmatch(r"[0-9A-F]{8}", app_id):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "A Cast application id is 8 hexadecimal characters (e.g. 1A2B3C4D)",
-            )
-        settings.cast_receiver_app_id = app_id or None
     await server_settings.set_external_services(session, settings)
     await session.commit()
     return _settings_out(settings)

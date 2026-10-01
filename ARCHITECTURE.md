@@ -602,21 +602,19 @@ without WebSocket, whose `send` applies commands), driven in remote mode.
   speed (ffmpeg `atempo`). Songs are only queued if the user may play them (`library_files`).
 - Without listeners it waits where it is, unless "Play even when nobody listens"
   (`alwaysOn`, a radio).
-- **On the TV** (Chromecast): Sound-Barrier's own Cast receiver, `frontend/public/cast/
-  receiver.html` (plain HTML / JS, Google's receiver framework CAF), shows a Now playing
-  screen: cover, title, progress, synced lyrics, the audiobook chapter. The TV hears the
+- **On the TV** (Chromecast): the Now playing page, `frontend/public/cast/receiver.html`
+  (plain HTML / JS), plays the stream and shows cover, title, progress, synced lyrics,
+  the audiobook chapter. The TV hears the
   stream a few seconds late, so the player keeps a **timeline** (`now`): each change of
   what plays (track, seek, pause, speed) stamped with the stream's own clock (seconds of
   sound sent to the encoder), and the start of each named listener on that clock (a new
   listener's first seconds are the burst). The receiver hears `start + audio.currentTime`
-  and shows the last change before it, advanced. A static page: hosted anywhere (the
-  server serves a copy), it learns the server and key from the stream URL. Its Cast app
-  id (Google Cast SDK Developer Console, "Custom Receiver" with the page's URL) goes in
-  Settings → External services (`cast_receiver_app_id`). `?stream=<stream URL>` previews
-  the screen in any browser; `&autoplay=1` starts the sound without a click (a TV).
+  and shows the last change before it, advanced. A static page: it learns the server and
+  key from the stream URL. `?stream=<stream URL>` previews the screen in any browser;
+  `&autoplay=1` starts the sound without a click (a TV). No Cast app of our own: none to
+  register with Google (DashCast opens the page; the local ways below need none).
 - **The ways to cast** (Cast button, the others under its "▾"; `src/cast/`): the Now
-  playing screen on the Chromecast, through our receiver when registered, else through
-  **DashCast** (`84912283`, a published receiver that opens a page, as Home Assistant's
+  playing screen on the Chromecast through **DashCast** (`84912283`, a published receiver that opens a page, as Home Assistant's
   dashboards do: the Chromecast opens receiver.html itself; a third party's page, given
   its address with the stream's key: Settings → External services `dashcast`, on by
   default); **"Cast from this computer"** (desktop Chrome, the Presentation API: Chrome
@@ -642,6 +640,12 @@ without the server's relay): the same commands (`remote/apply.ts`) and reports
 (`remote/reporter.ts`, shared with a controllable tab). Casting hands it this tab's queue
 where it is; "Play here", or the TV page closing, brings it back (advanced since its last
 report), playing if it was. Nothing leaves this browser but the music from the server.
+
+Controllable while it drives its TV page (the one exception to "controlling another player
+and being controlled: never both"): `RemoteTargetBridge` then reports the TV page's
+player instead of this tab's, passing its reports and the other devices' commands on as
+they are (the TV page speaks the remote protocol). The socket stays: the other devices
+keep the same entry ("… (on the TV)" while it casts), on the TV or back here.
 
 User management uses the Subsonic endpoints (`getUsers`, `createUser`, `updateUser`,
 `deleteUser`, `changePassword`) since Subsonic covers it. Two roles: **admin** and

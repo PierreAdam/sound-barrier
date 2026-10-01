@@ -94,6 +94,13 @@ export function tracksFrom(value: unknown): Track[] {
         })
       : undefined;
     const spokenKind = raw.spokenKind === "podcasts" || raw.spokenKind === "audiobooks" ? raw.spokenKind : undefined;
+    const place = (typeof raw.book === "object" && raw.book !== null ? raw.book : {}) as Record<string, unknown>;
+    const book = {
+      start: number(place.start),
+      duration: number(place.duration),
+      chapter: number(place.chapter),
+      chapters: number(place.chapters),
+    };
     return [
       {
         id,
@@ -111,6 +118,13 @@ export function tracksFrom(value: unknown): Track[] {
         longForm: raw.longForm === true ? true : undefined,
         spokenKind,
         chapters: chapters?.length ? chapters : undefined,
+        book:
+          book.start !== undefined &&
+          book.duration !== undefined &&
+          book.chapter !== undefined &&
+          book.chapters !== undefined
+            ? { start: book.start, duration: book.duration, chapter: book.chapter, chapters: book.chapters }
+            : undefined,
       },
     ];
   });

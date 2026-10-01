@@ -5,7 +5,7 @@ import { API_VERSION, CLIENT_NAME } from "../api/subsonic";
 import { useSubsonic } from "../api/useSubsonic";
 import { useSession } from "../auth/AuthContext";
 import { formatDuration, plural } from "../format";
-import { setDiagnosticsOpen } from "../pwa/diagnostics";
+import { setDiagnosticsOpen, setPlayerDiagnosticsOpen } from "../pwa/diagnostics";
 
 type ServerDetails = { libraries: ServerLibrary[]; runtime: ServerRuntime | null };
 
@@ -77,6 +77,14 @@ export function AboutPage() {
           Display diagnostics
         </button>{" "}
         <span className="text-muted">Screen measurements, to report a layout problem on a phone.</span>
+      </p>
+      <p>
+        <button className="button button--ghost" type="button" onClick={() => setPlayerDiagnosticsOpen(true)}>
+          Player diagnostics
+        </button>{" "}
+        <span className="text-muted">
+          What the audio does, as a log, to report a playback problem. Stays open when the app is reopened.
+        </span>
       </p>
 
       {error && <p className="text-error">The server's libraries and runtime could not be loaded: {error}</p>}

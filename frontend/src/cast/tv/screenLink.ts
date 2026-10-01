@@ -10,6 +10,8 @@ import type { ScreenChannel } from "./channel";
 
 export const SCREEN_TARGET = "screen";
 
+export type ScreenReport = { type: "state"; state: RemoteState } | { type: "queue"; queue: RemoteQueue };
+
 export class ScreenLink {
   private channel: ScreenChannel | null = null;
   private listeners = new Set<() => void>();
@@ -21,6 +23,9 @@ export class ScreenLink {
   // The TV page waits for a click to start the sound (true), or plays (false).
   private onBlocked: ((blocked: boolean) => void) | null = null;
   private blocked = false;
+  // Its reports, also passed on to the user's other devices when this tab is controllable
+  // (RemoteTargetBridge): the TV page speaks the remote control's protocol.
+  private reportListeners = new Set<(report: ScreenReport) => void>();
 
   /**
    * Starts on a TV page just opened: hands it the credentials to play with, then the
@@ -50,6 +55,7 @@ export class ScreenLink {
           break;
         case "state":
           if (!this.target) break;
+          this.reportListeners.forEach((listener) => listener({ type: "state", state: message.state }));
           this.target = { ...this.target, state: message.state, at: Date.now() };
           if (this.queue) this.last = { queue: this.queue, state: message.state, at: Date.now() };
           if (this.blocked && message.state.playing) {
@@ -60,6 +66,7 @@ export class ScreenLink {
           break;
         case "queue":
           this.queue = message.queue;
+          this.reportListeners.forEach((listener) => listener({ type: "queue", queue: message.queue }));
           this.set({ queue: message.queue });
           break;
         case "blocked":
@@ -95,6 +102,17 @@ export class ScreenLink {
 
   get active(): boolean {
     return this.channel !== null;
+  }
+
+  /** The TV page's reports (its queue, then its states), as they come. */
+  onReport(listener: (report: ScreenReport) => void): () => void {
+    this.reportListeners.add(listener);
+    return () => this.reportListeners.delete(listener);
+  }
+
+  /** What the TV page reported last (to report it again: a new connection). */
+  latest(): { queue: RemoteQueue | null; state: RemoteState | null } {
+    return { queue: this.queue, state: this.target?.state ?? null };
   }
 
   /** Closes the TV page (`bye`: it closes itself; a presentation is ended from here). */

@@ -49,9 +49,7 @@ async def _out(request: Request, session: DbSession, player: ServerPlayer) -> di
     return {
         **info,
         "streamUrl": _stream_url(request, info["key"]),
-        # The "Now playing" screen on Chromecasts: our own receiver (None: not registered),
-        # else through DashCast if allowed.
-        "receiverAppId": external.cast_receiver_app_id,
+        # The "Now playing" screen on Chromecasts, through DashCast (if allowed).
         "dashcast": external.dashcast,
     }
 

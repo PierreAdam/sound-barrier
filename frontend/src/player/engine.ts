@@ -26,6 +26,15 @@ export interface Track {
   longForm?: boolean; // an audiobook or a podcast: its position is kept as a bookmark
   spokenKind?: "podcasts" | "audiobooks"; // the section of a long-form track
   chapters?: Chapter[]; // inside the file (audiobooks), by start
+  book?: BookPlace; // audiobooks: where the file is in its book
+}
+
+/** Where a file is in its audiobook (the book's files in order, chapters inside them). */
+export interface BookPlace {
+  start: number; // seconds of the book before this file
+  duration: number; // seconds: the whole book
+  chapter: number; // the book's chapters before this file (a file without any counts as one)
+  chapters: number; // the book's chapters
 }
 
 /** A chapter inside a file ("soft" chapter, from its tags). */
@@ -54,6 +63,8 @@ export interface AudioLike {
   playbackRate: number;
   defaultPlaybackRate: number;
   readonly paused: boolean;
+  readonly readyState: number;
+  readonly seeking: boolean;
   play(): Promise<void>;
   pause(): void;
   load(): void;
@@ -104,6 +115,8 @@ export interface EngineOptions {
   createAudio?(): AudioLike;
   storage?: Pick<Storage, "getItem" | "setItem"> | null;
   now?(): number;
+  /** Told what the audio does (diagnostics, see audioTrace.ts). */
+  trace?(line: string): void;
 }
 
 interface Entry {
@@ -138,7 +151,29 @@ const FADE_TICK_MS = 50;
 /** "Pause at end of chapter": the exact stop is timed when the chapter ends within this. */
 const STOP_TIMER_SECONDS = 1.5;
 const UNDO_LEVELS = 20;
-const DECK_EVENTS = ["timeupdate", "durationchange", "play", "pause", "ended", "error"] as const;
+const DECK_EVENTS = [
+  "timeupdate",
+  "durationchange",
+  "loadedmetadata",
+  "canplay",
+  "play",
+  "playing",
+  "pause",
+  "seeking",
+  "seeked",
+  "ended",
+  "error",
+] as const;
+const HAVE_METADATA = 1; // HTMLMediaElement.readyState
+const HAVE_FUTURE_DATA = 3;
+/** A start position counts as reached this close (seeks land near, not on, a time). */
+const START_SLACK_SECONDS = 1.5;
+/** Seeks to a start position before giving up on it (Safari may drop each one). */
+const START_TRIES = 5;
+/** Playing and still seeking there after this: the seek is stuck, asked again. */
+const STUCK_SEEK_MS = 2000;
+/** Timeupdates traced after a start position was reached (to see playback go on). */
+const TRACED_TICKS = 4;
 
 export class PlayerEngine implements PlayerController {
   private readonly options: EngineOptions;
@@ -160,6 +195,11 @@ export class PlayerEngine implements PlayerController {
   private history: { original: Entry[]; order: Entry[]; index: number }[] = [];
   // The entry started at a chosen position (playQueue's `startAt`).
   private positionedKey: number | null = null;
+  // Where the current track must start, until its audio plays from there (see `place`).
+  private startAt: number | null = null;
+  private startTries = 0;
+  private startTimer: ReturnType<typeof setTimeout> | null = null;
+  private tracedTicks = 0;
 
   constructor(options: EngineOptions) {
     this.options = options;
@@ -182,7 +222,7 @@ export class PlayerEngine implements PlayerController {
 
   /** The exact position in seconds (the snapshot's follows "timeupdate", ~4 times a second). */
   get currentTime(): number {
-    return this.deck.currentTime;
+    return this.position;
   }
 
   /** Both audio elements (crossfade): the visualizer listens to them. */
@@ -209,6 +249,8 @@ export class PlayerEngine implements PlayerController {
   destroy(): void {
     this.cancelFade();
     this.clearStopTimer();
+    if (this.startTimer) clearTimeout(this.startTimer);
+    this.startTimer = null;
     this.decks.forEach((deck) => deck.pause());
     this.detach.forEach((detach) => detach());
     this.detach.length = 0;
@@ -235,7 +277,7 @@ export class PlayerEngine implements PlayerController {
     this.positionedKey = first && startAt !== undefined ? first.key : null;
     this.load(true);
     if (first && startAt) {
-      this.deck.currentTime = startAt;
+      this.place(startAt);
       this.emit();
     }
   }
@@ -358,7 +400,7 @@ export class PlayerEngine implements PlayerController {
 
   next(): void {
     const chapters = this.currentEntry?.track.chapters;
-    const chapter = chapters?.[chapterIndex(chapters, this.deck.currentTime) + 1];
+    const chapter = chapters?.[chapterIndex(chapters, this.position) + 1];
     if (chapter) {
       this.seek(chapter.start);
       return;
@@ -370,7 +412,7 @@ export class PlayerEngine implements PlayerController {
   }
 
   previous(): void {
-    const position = this.deck.currentTime;
+    const position = this.position;
     const chapters = this.currentEntry?.track.chapters;
     const current = chapterIndex(chapters, position);
     if (chapters && current >= 0) {
@@ -398,7 +440,7 @@ export class PlayerEngine implements PlayerController {
   seek(seconds: number): void {
     this.cancelFade();
     this.clearStopTimer();
-    this.deck.currentTime = seconds;
+    this.place(seconds);
     this.emit();
   }
 
@@ -507,7 +549,7 @@ export class PlayerEngine implements PlayerController {
       tracks: this.order.map((entry) => entry.track),
       originalOrder,
       index: this.index,
-      position: this.deck.currentTime || 0,
+      position: this.position,
     };
   }
 
@@ -530,12 +572,98 @@ export class PlayerEngine implements PlayerController {
     }
     this.index = length ? Math.min(Math.max(state.index, 0), length - 1) : -1;
     this.load(false);
-    // Before the audio is loaded, this sets where it will start.
-    if (this.currentEntry && state.position > 0) this.deck.currentTime = state.position;
+    if (this.currentEntry && state.position > 0) this.place(state.position);
     this.emit();
   }
 
   // --- internals ----------------------------------------------------------------
+
+  /** Where the current track is, or will start once its audio is loaded. */
+  private get position(): number {
+    return this.startAt ?? (this.deck.currentTime || 0);
+  }
+
+  /**
+   * Puts the current track at `seconds`. Its audio not loaded yet (phones load it only
+   * once played), the position is kept as its start position instead, reported (and
+   * saved) meanwhile, and sought once it plays (`followStart`): Safari on iOS starts a
+   * seek asked before, and never completes it (it reads the position, and plays from 0).
+   */
+  private place(seconds: number): void {
+    const deck = this.deck;
+    this.clearStart();
+    if (deck.readyState >= HAVE_METADATA) {
+      this.setTime(deck, seconds);
+      return;
+    }
+    this.startAt = seconds;
+    this.trace(`start at ${seconds.toFixed(1)} (not loaded)`);
+  }
+
+  /** A start position is pending: once the audio plays, it goes there (see `place`). */
+  private followStart(type: (typeof DECK_EVENTS)[number]): void {
+    const deck = this.deck;
+    const target = this.startAt;
+    // Not before it plays, and has the data to (a seek is not asked before on iOS).
+    if (target === null || deck.paused || deck.readyState < HAVE_FUTURE_DATA || deck.seeking) return;
+    if (Math.abs(deck.currentTime - target) > START_SLACK_SECONDS) {
+      this.seekStart(target, "not there");
+    } else if (type === "timeupdate" || type === "seeked") {
+      this.clearStart();
+      this.tracedTicks = TRACED_TICKS;
+      this.trace("start reached");
+    }
+  }
+
+  private seekStart(target: number, why: string): void {
+    if (this.startTimer) clearTimeout(this.startTimer);
+    this.startTimer = null;
+    if (this.startTries >= START_TRIES) {
+      this.clearStart();
+      this.trace(`start given up (${why})`);
+      return;
+    }
+    this.startTries++;
+    this.trace(`seek to start (${why}, try ${this.startTries})`);
+    this.setTime(this.deck, target);
+    // Safari may leave a seek pending, playing on from where it was (and no timeupdate).
+    this.startTimer = setTimeout(() => {
+      this.startTimer = null;
+      const deck = this.deck;
+      if (this.startAt === target && deck.seeking && !deck.paused) this.seekStart(target, "stuck");
+    }, STUCK_SEEK_MS);
+  }
+
+  private clearStart(): void {
+    if (this.startTimer) clearTimeout(this.startTimer);
+    this.startTimer = null;
+    this.startAt = null;
+    this.startTries = 0;
+  }
+
+  private setTime(deck: AudioLike, seconds: number): void {
+    try {
+      deck.currentTime = seconds;
+    } catch (error) {
+      this.trace(`currentTime refused: ${String(error)}`);
+    }
+  }
+
+  private trace(line: string): void {
+    this.options.trace?.(line);
+  }
+
+  private traceDeck(type: string): void {
+    if (!this.options.trace) return;
+    if (type === "timeupdate" && this.startAt === null) {
+      if (this.tracedTicks <= 0) return;
+      this.tracedTicks--;
+    }
+    const deck = this.deck;
+    const flags = [deck.seeking && "seeking", deck.paused && "paused"].filter(Boolean).join(" ");
+    const pending = this.startAt === null ? "" : ` start ${this.startAt.toFixed(1)}`;
+    this.trace(`${type} rs${deck.readyState} t${(deck.currentTime || 0).toFixed(1)} ${flags}${pending}`);
+  }
 
   private remember(): void {
     this.history.push({ original: [...this.original], order: [...this.order], index: this.index });
@@ -567,6 +695,8 @@ export class PlayerEngine implements PlayerController {
   private load(autoplay: boolean): void {
     this.cancelFade();
     this.clearStopTimer();
+    this.clearStart(); // a new source starts at 0
+    this.tracedTicks = 0;
     const deck = this.deck;
     const entry = this.currentEntry;
     if (!entry?.track.longForm) this.pauseAtEnd = false;
@@ -586,10 +716,12 @@ export class PlayerEngine implements PlayerController {
 
   private onDeckEvent(deckIndex: number, type: (typeof DECK_EVENTS)[number]): void {
     if (deckIndex !== this.active) return; // the incoming deck of a crossfade is silent state-wise
+    this.traceDeck(type);
     if (type === "ended") {
       this.onEnded();
       return;
     }
+    this.followStart(type);
     if (type === "timeupdate") this.maybeStartCrossfade();
     if (type === "timeupdate" || type === "play") this.checkPauseAtEnd();
     this.emit();
@@ -736,7 +868,7 @@ export class PlayerEngine implements PlayerController {
     const entry = this.currentEntry;
     const current = entry?.track ?? null;
     const length = this.order.length;
-    const position = deck.currentTime || 0;
+    const position = this.position;
     const chapter = chapterIndex(current?.chapters, position);
     return {
       queue: this.order.map((entry) => entry.track),

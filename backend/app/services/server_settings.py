@@ -119,12 +119,10 @@ class ExternalServices(BaseModel):
     audible_region: str = "com"  # api.audible.<region>
     open_library: bool = True
     itunes: bool = True  # podcasts
-    # The Google Cast app of Sound-Barrier's receiver (a "Now playing" screen on the TV,
-    # frontend/public/cast/receiver.html), registered by whoever hosts it. None: casting
-    # uses Google's Default Media Receiver (the sound only).
-    cast_receiver_app_id: str | None = None
-    # Without one: the Now playing screen through DashCast, a published receiver that opens
-    # a page (a third party's: it is given the page's address, with the stream's key).
+    # Casting the server player with its Now playing screen (frontend/public/cast/
+    # receiver.html) through DashCast, a published receiver that opens a page: a third
+    # party's, given the page's address with the stream's key. Off: the sound only, or the
+    # screen mirrored by the user's own Chrome ("Cast from this computer"), all local.
     dashcast: bool = True
 
 
