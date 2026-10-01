@@ -165,10 +165,9 @@ export function ServerPlayerSection({
   return (
     <>
       <MenuSection title={SERVER_PLAYER} info="About the server player">
-        <strong>The server player</strong> plays on the server itself, as a stream: cast it to a Chromecast (Chrome,
-        Edge, Chrome on Android), AirPlay it (Safari), or open it in VLC, which can cast it too (the way from an
-        iPhone to a Chromecast), or any app that plays internet radio. Control it from here or any of your devices,
-        like another device; closing this page does not stop it.
+        <p>
+          <strong>Server player</strong>: plays the queue on the server itself, as a live audio stream.
+        </p>
       </MenuSection>
       {player === undefined ? null : player === null ? (
         <button className="dropdown__item" type="button" disabled={busy} onClick={() => void start()}>
@@ -281,8 +280,10 @@ export function ServerPlayerSection({
               <span>Play even when nobody listens</span>
             </label>
             <InfoTip label="About playing without listeners">
-              <strong>Like a radio</strong>: it goes on even with no device connected to its stream. Otherwise it
-              waits where it is until a device listens ({player.listeners} now), so nothing is missed.
+              <p>
+                <strong>Play even when nobody listens</strong>: the server player keeps playing with no device
+                connected to its stream.
+              </p>
             </InfoTip>
           </div>
         </>

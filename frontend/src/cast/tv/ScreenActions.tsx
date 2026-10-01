@@ -81,10 +81,10 @@ export function ScreenActions({ close }: { close(): void }) {
           )}
         </div>
         <InfoTip label="About casting this player">
-          <strong>This browser&apos;s player on a TV</strong>, without the server player: a TV page plays this queue
-          (Now playing, synced lyrics) and this tab drives it. “Cast this player” shows it on a Chromecast, rendered
-          and sent by Chrome from this computer (it stays on, this tab open); “TV window” opens it in a window, for a
-          TV plugged in. “Play here” brings the queue back.
+          <p>
+            <strong>Cast this player</strong>: plays this browser&apos;s queue on a TV, with Now playing and synced
+            lyrics, without the server player.
+          </p>
         </InfoTip>
       </div>
       {message && <p className="dropdown__header remote-menu__note">{message}</p>}

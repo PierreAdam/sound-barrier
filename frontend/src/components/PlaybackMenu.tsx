@@ -148,7 +148,9 @@ function PlaybackChoices({
   return (
     <>
       <MenuSection title="This browser" info="About players">
-        <strong>Players</strong>: {SWITCH_HINT} Every browser without a player of its own plays the Shared one.
+        <p>
+          <strong>Players</strong>: each player is a queue of its own, and this browser plays one of them.
+        </p>
       </MenuSection>
       {queues.map((queue) =>
         item(queue.id ?? "shared", here && queue.id === playerId, queue.name, queue.detail, () => {
@@ -174,9 +176,9 @@ function PlaybackChoices({
           <span>Let my other devices control this tab</span>
         </label>
         <InfoTip label="About remote control">
-          <strong>Remote control</strong>: your other devices (a phone, another computer or tab) then list this
-          tab under “Other devices”, and can play, pause, skip and change its queue. Off again when this page is
-          reloaded: a reloaded page cannot start playing before it is tapped.
+          <p>
+            <strong>Remote control</strong>: makes this tab controllable from your other devices.
+          </p>
         </InfoTip>
       </div>
       {controllable.kind === "replaced" && (
@@ -185,9 +187,9 @@ function PlaybackChoices({
       <ScreenActions close={close} />
 
       <MenuSection title="Other devices" info="About controlling another device">
-        <strong>Control another device</strong>: the player bar and the queue then show what it plays, and what
-        you play or queue while browsing goes there. Nothing plays here meanwhile (“Play here” brings your own
-        queue back). A device is listed once “Let my other devices control this tab” is on there.
+        <p>
+          <strong>Other devices</strong>: controls the player of another device from this one.
+        </p>
       </MenuSection>
       {targets === null ? (
         <p className="dropdown__header remote-menu__note">{connected ? "Looking for your devices…" : "Connecting…"}</p>
