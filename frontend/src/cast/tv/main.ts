@@ -150,7 +150,12 @@ interface Lyrics {
   songId: string;
   starts: number[]; // ms, per line
   items: HTMLElement[];
-  centers: number[]; // px, where each line is in the list
+  centers: number[]; // px, where each line is in the list (measured again when resized)
+}
+
+/** Where each line's middle is in the list: measured once, not at every change of line. */
+function measure(items: HTMLElement[]): number[] {
+  return items.map((item) => item.offsetTop + item.offsetHeight / 2);
 }
 
 /** Now playing, as the server player's receiver shows it (writes only what changed). */
@@ -161,7 +166,21 @@ class Screen {
   private lyricsFor: string | null = null;
   private lastLine = -2;
 
-  constructor(private readonly client: SubsonicClient) {}
+  constructor(private readonly client: SubsonicClient) {
+    // The text scales with the window (vw): resized (a TV window), the lines wrap anew.
+    // Once a frame at most while the window is dragged (a transcript has many lines).
+    let frame = 0;
+    window.addEventListener("resize", () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (!this.lyrics) return;
+        this.lyrics.centers = measure(this.lyrics.items);
+        this.drawLyrics(this.lastPosition, true);
+      });
+    });
+  }
+
+  private lastPosition = 0;
 
   private set<T>(key: string, value: T, apply: (value: T) => void): void {
     if (this.written.get(key) === value) return;
@@ -228,8 +247,7 @@ class Screen {
       });
       el.lines!.replaceChildren(...items);
       el.lyrics!.hidden = false;
-      const centers = items.map((item) => item.offsetTop + item.offsetHeight / 2);
-      this.lyrics = { songId: track.id, starts: lines.map((l) => l.start ?? Infinity), items, centers };
+      this.lyrics = { songId: track.id, starts: lines.map((l) => l.start ?? Infinity), items, centers: measure(items) };
       this.drawLyrics(0, true);
     } catch {
       // no lyrics then
@@ -238,6 +256,7 @@ class Screen {
 
   /** The line playing, kept in the middle; its neighbours less faded. */
   private drawLyrics(position: number, force = false): void {
+    this.lastPosition = position;
     const lyrics = this.lyrics;
     if (!lyrics) return;
     const ms = position * 1000;

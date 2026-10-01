@@ -1,8 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { api, type SongLyrics } from "../api/native";
+import { frameLoop } from "../frames";
 import { usePlayerEngine } from "../player/PlayerContext";
 import { keepFocus } from "../player/shortcuts";
+import { useFrameRate } from "../preferences/lowPower";
 import { usePreferences } from "../preferences/PreferencesContext";
 
 // A synced line shows a little before its time (it takes a moment to read).
@@ -119,6 +121,8 @@ export function loadLyrics(songId: string): Promise<SongLyrics> {
  */
 export function Lyrics({ songId, emptyText = "No lyrics found for this song." }: { songId: string; emptyText?: string }) {
   const engine = usePlayerEngine();
+  const playing = useSyncExternalStore(engine.subscribe, () => engine.getSnapshot().playing);
+  const fps = useFrameRate();
   const { preferences, update } = usePreferences();
   const karaoke = preferences?.lyrics.karaoke ?? false;
   const [lyrics, setLyrics] = useState<SongLyrics | null>(cache.get(songId) ?? null);
@@ -167,20 +171,22 @@ export function Lyrics({ songId, emptyText = "No lyrics found for this song." }:
     activeTop.current = null;
   }, [start]); // only when the window moves
 
-  // Every frame: the current line, the scroll gliding to it, and the karaoke fill.
+  // Every frame while playing (fewer with "Lighter animations"): the current line, the
+  // scroll gliding to it, and the karaoke fill. Paused: when the player changes (a seek),
+  // the scroll going straight there.
   useEffect(() => {
     if (!synced) return;
-    let frame = 0;
-    let last = performance.now();
     let current = -1;
-    const tick = (now: number) => {
-      frame = requestAnimationFrame(tick);
-      const elapsed = Math.min(now - last, 100);
-      last = now;
+    // The karaoke fill last set on each word: only changes touch the page's styles.
+    const fills: (string | null)[] = [];
+    /** `elapsedMs` since the previous frame, null: at once (paused). True: a new line. */
+    const tick = (elapsedMs: number | null): boolean => {
+      const elapsed = Math.min(elapsedMs ?? 100, 100);
       const position = engine.currentTime * 1000;
       const index = lineAt(synced, position + LEAD_MS);
       const box = scroller.current;
-      if (index !== current) {
+      const moved = index !== current;
+      if (moved) {
         // Where the new current line is now (still in the page: the window moves by
         // blocks): if the window moves with it, the view stays put.
         const coming = index >= 0 ? list.current?.children[index - startRef.current] : null;
@@ -197,7 +203,7 @@ export function Lyrics({ songId, emptyText = "No lyrics found for this song." }:
         box.scrollTop = target ?? 0;
       } else if (box && target !== null && Date.now() >= manualUntil.current) {
         const gap = target - box.scrollTop;
-        const step = gap * (1 - Math.exp(-elapsed / SCROLL_EASING_MS));
+        const step = elapsedMs === null ? gap : gap * (1 - Math.exp(-elapsed / SCROLL_EASING_MS));
         // At least a pixel: the browser rounds the scroll to device pixels, smaller steps
         // were lost and the glide stopped a few pixels short of the middle.
         if (Math.abs(gap) > 0.5) box.scrollTop += Math.abs(step) < 1 ? Math.sign(gap) * Math.min(Math.abs(gap), 1) : step;
@@ -207,13 +213,28 @@ export function Lyrics({ songId, emptyText = "No lyrics found for this song." }:
         const word = words[i];
         if (!element || !word) return;
         const fill = Math.min(1, Math.max(0, (position - word.start) / (word.end - word.start)));
-        element.style.setProperty("--fill", fill.toFixed(3));
+        const value = fill.toFixed(3);
+        if (fills[i] === value) return;
+        fills[i] = value;
+        element.style.setProperty("--fill", value);
         element.classList.toggle("lyrics__word--current", fill > 0 && fill < 1);
       });
+      return moved;
     };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [synced, engine, words]);
+    if (playing) return frameLoop((_, elapsed) => void tick(elapsed), fps);
+    // Paused: at the next frame after a change, and once more after a new line is drawn.
+    let frame = 0;
+    const later = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => tick(null) && later());
+    };
+    later();
+    const unsubscribe = engine.subscribe(later);
+    return () => {
+      unsubscribe();
+      cancelAnimationFrame(frame);
+    };
+  }, [synced, engine, words, playing, fps]);
 
   const userScrolled = () => {
     manualUntil.current = Date.now() + MANUAL_SCROLL_MS;

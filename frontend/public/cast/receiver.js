@@ -32,7 +32,7 @@
   let stream = null; // { base, key, listener }
   let now = null; // the last /now answer
   let shownKey; // the entry shown (its key), to update what changes with it
-  let lyrics = null; // { lines, items, centers }: synced lyrics only
+  let lyrics = null; // { lines, items, centers }: synced lyrics only (centers: measure())
   let lyricsFor = null;
   let lastLine = -2;
   const written = {}; // what is on the page, not to write it again
@@ -148,19 +148,36 @@
         item.textContent = line.text || "♪";
         return item;
       });
-      // Where each line is in the list: measured once, not at every change of line.
       el.lines.replaceChildren(...items);
       el.lyrics.hidden = false;
-      const centers = items.map((item) => item.offsetTop + item.offsetHeight / 2);
-      lyrics = { lines: found.lines, items, centers };
+      lyrics = { lines: found.lines, items, centers: measure(items) };
       drawLyrics(0, true);
     } catch (e) {
       // no lyrics then
     }
   }
 
+  /** Where each line's middle is in the list: measured once, not at every change of line. */
+  function measure(items) {
+    return items.map((item) => item.offsetTop + item.offsetHeight / 2);
+  }
+
+  // The text scales with the window (vw): resized (a browser window), the lines wrap anew.
+  // Once a frame at most while the window is dragged.
+  let lastPosition = 0;
+  let resizeFrame = 0;
+  window.addEventListener("resize", () => {
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => {
+      if (!lyrics) return;
+      lyrics.centers = measure(lyrics.items);
+      drawLyrics(lastPosition, true);
+    });
+  });
+
   /** The line playing (synced lyrics), kept in the middle; its neighbours less faded. */
   function drawLyrics(position, force) {
+    lastPosition = position;
     if (!lyrics) return;
     let current = -1;
     const ms = position * 1000;
