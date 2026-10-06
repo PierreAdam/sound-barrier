@@ -26,6 +26,21 @@ review, helped by Audible, MusicBrainz, Open Library and iTunes.
 | ![Review of an import in Library Management](docs/screenshots/review.png) | ![The player with the queue open](docs/screenshots/player.png) |
 | **Import review**: MusicBrainz candidates with track-by-track differences | **Player**: the queue panel, with crossfade, shuffle and repeat |
 
+## What's new in 2.0
+
+- **Players and remote control**: a queue per device, and any tab, computer or phone can
+  drive another player.
+- **Casting to TVs**: cast your own queue to a Chromecast or a TV window, or use the new
+  **server player** (a stream you can cast, AirPlay or open in VLC), both with a Now playing
+  screen and synced lyrics on the TV.
+- **Audiobooks and podcasts follow you**: bookmarks are shared across devices (with the
+  device that moved them, and "Undo"), the player bar shows the chapter, "Chapter n of N"
+  and the time left, and resuming works again on iPhones.
+- **Lighter animations**: an option (My account → Player) to draw the visualizers and the
+  lyrics at 20 frames a second, plus several fixes that make them cheaper for everyone.
+- **Player diagnostics** (About): a log of the audio's recent events, to track down
+  playback problems on a phone.
+
 ## Features
 
 **Subsonic server**
@@ -72,9 +87,12 @@ review, helped by Audible, MusicBrainz, Open Library and iTunes.
   in reading order; a book's description, narrator and series; chapters inside a file
   (M4B) listed and skippable; playback speed 1× to 2×, −15 s / +30 s and "Pause at end of
   chapter". Admins edit a book's details and chapters (Audible's chapter list on demand).
+- **Bookmarks followed across devices**: stop an audiobook or podcast on one device, resume
+  on another. The player bar shows the current chapter, "Chapter n of N" and the time left.
 - Phones: an installable home-screen app (Android, iPhone), a layout for small screens,
   lock-screen controls.
-- Light / dark themes with several accent colors.
+- Light / dark themes with several accent colors; a "Lighter animations" option for
+  slower devices.
 - Admin settings: library folders, scan progress and schedule, user management, external
   services, album search links, transcript workers.
 
@@ -143,7 +161,7 @@ One image holds the backend, the web UI and ffmpeg; Postgres runs next to it.
 
 The image is published on Docker Hub:
 [`dontpanic57/sound-barrier`](https://hub.docker.com/r/dontpanic57/sound-barrier)
-(`latest`, or a version such as `1.0.0`; linux/amd64). No need to clone the repository:
+(`latest`, or a version such as `2.0.0`; linux/amd64). No need to clone the repository:
 
 ```bash
 mkdir sound-barrier && cd sound-barrier
@@ -154,7 +172,7 @@ docker compose up -d
 ```
 
 Updating: `docker compose pull && docker compose up -d` (migrations are applied on
-start). To stay on a version, set `SOUND_BARRIER_VERSION=1.0.0` in `.env`.
+start). To stay on a version, set `SOUND_BARRIER_VERSION=2.0.0` in `.env`.
 
 ### From the sources
 

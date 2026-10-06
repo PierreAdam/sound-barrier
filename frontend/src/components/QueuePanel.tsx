@@ -19,11 +19,21 @@ export function QueuePanel({ open, onClose }: { open: boolean; onClose(): void }
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const [drag, setDrag] = useState<DragState | null>(null);
   const currentRow = useRef<HTMLTableRowElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const { queue, keys } = state;
 
   // Show the playing track when the panel opens.
+  // Scrolls the track list only: scrollIntoView would also scroll the (overflow: hidden) slot
+  // clipping the panel while it is still below the player bar, making it jump during the
+  // opening animation.
   useEffect(() => {
-    if (open) currentRow.current?.scrollIntoView({ block: "nearest" });
+    const body = bodyRef.current;
+    const row = currentRow.current;
+    if (!open || !body || !row) return;
+    const bodyRect = body.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    if (rowRect.top < bodyRect.top) body.scrollTop += rowRect.top - bodyRect.top;
+    else if (rowRect.bottom > bodyRect.bottom) body.scrollTop += rowRect.bottom - bodyRect.bottom;
   }, [open]);
 
   // Forget selected entries that left the queue.
@@ -114,7 +124,7 @@ export function QueuePanel({ open, onClose }: { open: boolean; onClose(): void }
         </button>
       </header>
 
-      <div className="queue__body">
+      <div className="queue__body" ref={bodyRef}>
         {queue.length === 0 ? (
           <p className="queue__empty text-muted">The queue is empty. Play or add songs from an album.</p>
         ) : (
