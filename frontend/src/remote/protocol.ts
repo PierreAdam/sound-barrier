@@ -17,6 +17,8 @@ export interface RemoteState extends Omit<PlayerSnapshot, "queue" | "keys"> {
   /** The current entry's key: remotes find it in their copy of the queue (which may have
    * been changed there already, e.g. a drag and drop, before the target's answer). */
   currentKey: number | null;
+  /** A server player's: the devices playing its stream. */
+  listeners?: number;
 }
 
 export interface RemoteQueue {

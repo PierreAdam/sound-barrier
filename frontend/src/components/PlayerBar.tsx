@@ -8,6 +8,7 @@ import type { Track } from "../player/engine";
 import { usePlayer, useResumeNotice } from "../player/PlayerContext";
 import { usePreferences } from "../preferences/PreferencesContext";
 import { keepFocus } from "../player/shortcuts";
+import { useRemoteLink } from "../remote/link";
 import { dismissModeNotice, playHere, useModeNotice } from "../remote/mode";
 import { useRemoteTarget } from "../remote/target";
 import { albumUrl, artistUrl } from "../player/tracks";
@@ -365,7 +366,8 @@ function PlayerWhere() {
   if (remote) {
     return (
       <span className="player__where" role="status" title={notice ?? undefined}>
-        Playing on <strong>{remote.name}</strong> ·{" "}
+        Playing on <strong>{remote.name}</strong>
+        {remote.targetKind === "server" && <ServerListeners target={remote.target} />} ·{" "}
         <button className="link-button" type="button" onClick={() => playHere()}>
           Play here
         </button>
@@ -391,6 +393,19 @@ function PlayerWhere() {
     );
   }
   return null;
+}
+
+/** A server player's listeners: the devices playing its stream (its reported state). */
+function ServerListeners({ target }: { target: string }) {
+  const { targets } = useRemoteLink();
+  const listeners = targets?.find((t) => t.id === target)?.state?.listeners;
+  if (listeners === undefined) return null;
+  return (
+    <span className="player__listeners" title="Devices playing the server player's stream">
+      {" "}
+      · {listeners} {listeners === 1 ? "listener" : "listeners"}
+    </span>
+  );
 }
 
 /**

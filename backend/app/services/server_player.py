@@ -15,8 +15,9 @@ The pipeline, per player:
   the devices' buffers stay small and commands are heard quickly. Paused, it sends
   silence: the stream never stops, the devices stay connected.
 - The encoder runs as long as the player: one continuous MP3 stream, copied to every
-  listener. A listener joining gets the last seconds first (BURST_SECONDS), so its device
-  starts at once.
+  listener. A listener joining gets the last seconds first (BURST_SECONDS, or what it asks
+  for), so its device starts at once. Listeners asking for another bit rate get their own
+  encoder, started from the last seconds of sound, stopped when the last of them leaves.
 
 Without listeners the pump waits (the position stays where it is), unless the player is
 `always_on` (a radio playing for nobody).
@@ -63,8 +64,15 @@ BYTES_PER_SECOND = SAMPLE_RATE * CHANNELS * 2  # signed 16-bit
 FRAME_SECONDS = 0.02
 FRAME_BYTES = int(BYTES_PER_SECOND * FRAME_SECONDS)  # a multiple of 4: whole samples
 SILENCE = bytes(FRAME_BYTES)
-BIT_RATE = 192  # kbps
-BURST_SECONDS = 2.0  # of MP3 a new listener gets at once
+BIT_RATE = 192  # kbps, by default
+BIT_RATES = (64, 96, 128, 160, 192, 256, 320)  # what a listener may ask for (`?bitrate=`)
+BURST_SECONDS = 2.0  # of MP3 a new listener gets at once, by default
+# The most it may ask for (`?burst=`): internet radio clients with a large buffer pause until
+# it is nearly full (some hold ~160 KB, ~7 s at 192 kbps). Kept for every player.
+MAX_BURST_SECONDS = 10.0
+RECENT_FRAMES = int(MAX_BURST_SECONDS / FRAME_SECONDS)  # of sound, for a new encoder's burst
+PRIME_TIMEOUT_SECONDS = 1.0  # a new encoder encodes them faster than that
+PRIME_SLACK_SECONDS = 0.2
 OUTPUT_CHUNK = 4096
 LISTENER_BACKLOG = 512  # output chunks (~85 s at 192 kbps): slower listeners are dropped
 LATE_RESET_SECONDS = 1.0  # further behind than this (stalled): the pace starts over
@@ -75,6 +83,8 @@ MAX_NAMED_LISTENERS = 32  # their start is kept (the Cast receiver's: see `now`)
 SPEEDS = (1.0, 1.25, 1.5, 1.75, 2.0)  # of audiobooks and podcasts, as in the web UI
 NAME = "Server player"
 DEVICE = "Sound-Barrier"
+ICY_METAINT = 16000  # MP3 bytes between two metadata blocks, for clients asking for them
+ICY_MAX_BLOCK = 255 * 16  # a block's length is one byte, in units of 16
 
 # Given the song ids of tracks a remote sent: the files of those the user may play.
 Resolve = Callable[[list[str]], Awaitable[dict[str, Path]]]
@@ -114,7 +124,7 @@ def _decoder_command(ffmpeg: str, path: Path, start: float, speed: float) -> lis
     return [*command, "-f", "s16le", "-ac", str(CHANNELS), "-ar", str(SAMPLE_RATE), "pipe:1"]
 
 
-def _encoder_command(ffmpeg: str) -> list[str]:
+def _encoder_command(ffmpeg: str, bit_rate: int) -> list[str]:
     return [
         ffmpeg,
         "-hide_banner",
@@ -139,7 +149,7 @@ def _encoder_command(ffmpeg: str) -> list[str]:
         "-c:a",
         "libmp3lame",
         "-b:a",
-        f"{BIT_RATE}k",
+        f"{bit_rate}k",
         # A live stream: no header announcing a length, no tags, every packet at once.
         "-write_xing",
         "0",
@@ -162,6 +172,138 @@ async def _kill(process: asyncio.subprocess.Process | None) -> None:
     # wait() would wait forever for it to close. This reads what is left, then its end.
     with contextlib.suppress(Exception):
         await asyncio.wait_for(process.communicate(), timeout=5)
+
+
+def icy_block(title: str | None) -> bytes:
+    """A Shoutcast metadata block: its length (in 16 bytes), then `StreamTitle='…';` padded
+    with zeros. None: a lone zero, nothing new."""
+    if title is None:
+        return b"\0"
+    head, tail = b"StreamTitle='", b"';"
+    text = title.encode()[: ICY_MAX_BLOCK - len(head) - len(tail)]
+    meta = head + text.decode(errors="ignore").encode() + tail
+    meta += bytes(-len(meta) % 16)
+    return bytes([len(meta) // 16]) + meta
+
+
+async def with_icy(
+    chunks: AsyncIterator[bytes], title: Callable[[], str], metaint: int = ICY_METAINT
+) -> AsyncIterator[bytes]:
+    """The stream with a metadata block every `metaint` bytes (an internet radio client's
+    "Icy-MetaData: 1"): the title playing when it is sent, only when it changed."""
+    sent: str | None = None
+    left = metaint
+    async for chunk in chunks:
+        while len(chunk) >= left:
+            now = title()
+            yield chunk[:left] + icy_block(now if now != sent else None)
+            sent, chunk, left = now, chunk[left:], metaint
+        if chunk:
+            left -= len(chunk)
+            yield chunk
+
+
+class _Encoder:
+    """One bit rate of the stream: its ffmpeg encoder, its last MAX_BURST_SECONDS of MP3
+    (the bursts), its listeners."""
+
+    def __init__(self, bit_rate: int, process: asyncio.subprocess.Process) -> None:
+        self.bit_rate = bit_rate
+        self.process = process
+        self.listeners: set[asyncio.Queue[bytes | None]] = set()
+        self._burst: deque[bytes] = deque()
+        self._burst_bytes = 0
+        self._grew = asyncio.Event()  # MP3 came out
+        self.task = asyncio.create_task(self._fan_out(), name=f"server-player-{bit_rate}k")
+
+    @classmethod
+    async def start(cls, ffmpeg: str, bit_rate: int) -> "_Encoder":
+        process = await asyncio.create_subprocess_exec(
+            *_encoder_command(ffmpeg, bit_rate),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        return cls(bit_rate, process)
+
+    def bytes_of(self, seconds: float) -> int:
+        return int(seconds * self.bit_rate * 1000 / 8)
+
+    def write(self, frame: bytes) -> None:
+        assert self.process.stdin is not None
+        with contextlib.suppress(ConnectionError, RuntimeError):  # closed meanwhile
+            self.process.stdin.write(frame)
+
+    async def drain(self) -> None:
+        assert self.process.stdin is not None
+        with contextlib.suppress(ConnectionError):
+            await self.process.stdin.drain()
+
+    async def primed(self, size: int) -> None:
+        """Waits (a moment at most) until its burst has `size` bytes: a new encoder's."""
+        deadline = time.monotonic() + PRIME_TIMEOUT_SECONDS
+        while self._burst_bytes < size and (left := deadline - time.monotonic()) > 0:
+            self._grew.clear()
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self._grew.wait(), left)
+
+    def burst(self, seconds: float) -> bytes:
+        """The last chunks of MP3, `seconds` of it (whole chunks, a bit more)."""
+        wanted = self.bytes_of(min(max(seconds, 0.0), MAX_BURST_SECONDS))
+        chunks: list[bytes] = []
+        size = 0
+        for chunk in reversed(self._burst):
+            if size >= wanted:
+                break
+            chunks.append(chunk)
+            size += len(chunk)
+        return b"".join(reversed(chunks))
+
+    def forget(self) -> None:
+        """What was encoded so far is stale (nobody listened meanwhile)."""
+        self._burst.clear()
+        self._burst_bytes = 0
+
+    async def _fan_out(self) -> None:
+        assert self.process.stdout is not None
+        output = self.process.stdout
+        burst_limit = self.bytes_of(MAX_BURST_SECONDS)
+        while chunk := await output.read(OUTPUT_CHUNK):
+            self._burst.append(chunk)
+            self._burst_bytes += len(chunk)
+            while self._burst_bytes - len(self._burst[0]) >= burst_limit:
+                self._burst_bytes -= len(self._burst.popleft())
+            self._grew.set()
+            for queue in list(self.listeners):
+                if not _offer(queue, chunk):
+                    log.info("Server player: a listener too slow was dropped")
+                    self.listeners.discard(queue)
+                    _end(queue)
+        log.warning("Server player: the %sk encoder stopped", self.bit_rate)
+
+    async def close(self) -> None:
+        self.task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await self.task
+        await _kill(self.process)
+        for queue in self.listeners:
+            _end(queue)
+        self.listeners.clear()
+
+
+def _offer(queue: asyncio.Queue[bytes | None], chunk: bytes) -> bool:
+    try:
+        queue.put_nowait(chunk)
+    except asyncio.QueueFull:
+        return False
+    return True
+
+
+def _end(queue: asyncio.Queue[bytes | None]) -> None:
+    """Its listener stops at once: what it has not received yet goes."""
+    while not queue.empty():
+        queue.get_nowait()
+    queue.put_nowait(None)
 
 
 def _finite(value: object) -> float | None:
@@ -188,10 +330,9 @@ class ServerPlayer:
         self._decoded = 0  # PCM bytes sent from the current decoder
         self._decoder_speed = 1.0  # the speed the current decoder plays at
         self._decoder: asyncio.subprocess.Process | None = None
-        self._encoder: asyncio.subprocess.Process | None = None
-        self._listeners: set[asyncio.Queue[bytes | None]] = set()
-        self._burst: deque[bytes] = deque()
-        self._burst_bytes = 0
+        self._encoders: dict[int, _Encoder] = {}  # by bit rate: BIT_RATE's always
+        self._recent: deque[bytes] = deque(maxlen=RECENT_FRAMES)  # of sound sent to them
+        self._joining = 0  # listeners waiting for their burst: the pump goes on for them
         self._wake = asyncio.Event()
         self._changed = asyncio.Event()  # something to report
         self._lock = asyncio.Lock()  # commands against the pump's track changes
@@ -213,16 +354,8 @@ class ServerPlayer:
     ) -> None:
         """Starts the stream; `report` gets its "state" and "queue" messages (the hub)."""
         self._report = report
-        self._encoder = await asyncio.create_subprocess_exec(
-            *_encoder_command(self._ffmpeg),
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        self._tasks = [
-            asyncio.create_task(self._pump(), name="server-player-pump"),
-            asyncio.create_task(self._fan_out(), name="server-player-output"),
-        ]
+        self._encoders[BIT_RATE] = await _Encoder.start(self._ffmpeg, BIT_RATE)
+        self._tasks = [asyncio.create_task(self._pump(), name="server-player-pump")]
         if report is not None:
             self._tasks.append(asyncio.create_task(self._reporter(), name="server-player-report"))
 
@@ -233,10 +366,10 @@ class ServerPlayer:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
         await _kill(self._decoder)
-        await _kill(self._encoder)
-        for queue in self._listeners:
-            self._offer(queue, None)
-        self._listeners.clear()
+        encoders = list(self._encoders.values())
+        self._encoders.clear()
+        for encoder in encoders:
+            await encoder.close()
 
     def set_always_on(self, always_on: bool) -> None:
         self.always_on = always_on
@@ -427,6 +560,7 @@ class ServerPlayer:
             "pauseAtEnd": self._pause_at_end,
             "speed": self._speed,
             "queueRevision": queue_revision,
+            "listeners": self.listeners,  # devices playing the stream
         }
 
     def _mark(self) -> None:
@@ -457,6 +591,19 @@ class ServerPlayer:
             "timeline": list(self._timeline),
         }
 
+    def stream_title(self) -> str:
+        """What plays, as internet radio clients show it: "Artist - Title", and the chapter
+        of an audiobook."""
+        current = self.queue.current
+        if current is None:
+            return ""
+        track = current.track
+        title = " - ".join(t for t in (track.get("artist"), track["title"]) if t)
+        chapter = chapter_index(current.chapters, self.position)
+        if chapter >= 0:
+            title += f" · {current.chapters[chapter]['title']}"
+        return title
+
     def queued_ids(self) -> set[str]:
         """The songs and covers queued or in the timeline (what the receiver may ask for)."""
         ids: set[str] = set()
@@ -473,7 +620,7 @@ class ServerPlayer:
         return {
             "target": self.target_id,
             "key": self.key,
-            "listeners": len(self._listeners),
+            "listeners": self.listeners,
             "alwaysOn": self.always_on,
         }
 
@@ -503,19 +650,39 @@ class ServerPlayer:
 
     # --- listeners ------------------------------------------------------------------
 
-    async def listen(self, name: str | None = None) -> AsyncIterator[bytes]:
-        """The MP3 stream, from now on (after the last BURST_SECONDS). `name`: its start
-        on the stream's clock is kept (`now`)."""
+    @property
+    def listeners(self) -> int:
+        """Devices playing the stream, at every bit rate."""
+        return sum(len(encoder.listeners) for encoder in self._encoders.values())
+
+    async def listen(
+        self,
+        name: str | None = None,
+        burst_seconds: float = BURST_SECONDS,
+        bit_rate: int = BIT_RATE,
+    ) -> AsyncIterator[bytes]:
+        """The MP3 stream at `bit_rate` (one of BIT_RATES), from now on, after the last
+        `burst_seconds` (at most MAX_BURST_SECONDS): a device's buffer fills at once, but it
+        hears that much late. `name`: its start on the stream's clock is kept (`now`)."""
+        if bit_rate not in BIT_RATES:
+            raise ValueError(f"Not a bit rate of the stream: {bit_rate}")
+        self._joining += 1
+        self._wake.set()
+        try:
+            encoder = await self._encoder(bit_rate, burst_seconds)
+        finally:
+            self._joining -= 1
         queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=LISTENER_BACKLOG)
         # No await between the two: nothing is missed or sent twice.
-        burst = b"".join(self._burst)
+        burst = encoder.burst(burst_seconds)
         if name:
-            burst_seconds = len(burst) * 8 / (BIT_RATE * 1000)
+            burst_seconds = len(burst) * 8 / (bit_rate * 1000)
             self._starts[name] = max(self._stream_time - burst_seconds, 0.0)
             while len(self._starts) > MAX_NAMED_LISTENERS:
                 del self._starts[next(iter(self._starts))]
-        self._listeners.add(queue)
+        encoder.listeners.add(queue)
         self._wake.set()
+        self._changed.set()  # the number of listeners, in the state
         try:
             if burst:
                 yield burst
@@ -525,29 +692,31 @@ class ServerPlayer:
                     return
                 yield chunk
         finally:
-            self._listeners.discard(queue)
+            encoder.listeners.discard(queue)
+            self._changed.set()
+            # The last listener at another bit rate than BIT_RATE: its encoder stops.
+            last = not encoder.listeners and self._encoders.get(bit_rate) is encoder
+            if last and bit_rate != BIT_RATE:
+                del self._encoders[bit_rate]
+                await encoder.close()
 
-    def _offer(self, queue: asyncio.Queue[bytes | None], chunk: bytes | None) -> bool:
-        try:
-            queue.put_nowait(chunk)
-        except asyncio.QueueFull:
-            return False
-        return True
-
-    async def _fan_out(self) -> None:
-        assert self._encoder is not None and self._encoder.stdout is not None
-        output = self._encoder.stdout
-        burst_limit = int(BURST_SECONDS * BIT_RATE * 1000 / 8)
-        while chunk := await output.read(OUTPUT_CHUNK):
-            self._burst.append(chunk)
-            self._burst_bytes += len(chunk)
-            while self._burst_bytes - len(self._burst[0]) >= burst_limit:
-                self._burst_bytes -= len(self._burst.popleft())
-            for queue in list(self._listeners):
-                if not self._offer(queue, chunk):
-                    log.info("Server player: a listener too slow was dropped")
-                    self._listeners.discard(queue)
-        log.warning("Server player: the encoder stopped")
+    async def _encoder(self, bit_rate: int, burst_seconds: float) -> _Encoder:
+        """The encoder at `bit_rate`, with a burst of `burst_seconds` if the recent sound
+        has that much: a new one first encodes it, in a moment."""
+        encoder = self._encoders.get(bit_rate)
+        if encoder is None:
+            started = await _Encoder.start(self._ffmpeg, bit_rate)
+            encoder = self._encoders.get(bit_rate)  # another listener's, meanwhile
+            if encoder is not None:
+                await started.close()
+            else:
+                encoder = self._encoders[bit_rate] = started
+                for frame in self._recent:  # then what the pump sends: no await between
+                    encoder.write(frame)
+        # Less a little: what the encoder holds back (its delay), still on its way.
+        seconds = min(burst_seconds, MAX_BURST_SECONDS, len(self._recent) * FRAME_SECONDS)
+        await encoder.primed(encoder.bytes_of(seconds - PRIME_SLACK_SECONDS))
+        return encoder
 
     # --- the pump -------------------------------------------------------------------
 
@@ -622,20 +791,24 @@ class ServerPlayer:
             return SILENCE
 
     async def _pump(self) -> None:
-        assert self._encoder is not None and self._encoder.stdin is not None
-        encoder = self._encoder.stdin
         deadline = time.monotonic()
         while True:
-            if not self.always_on and not self._listeners:
+            if not self.always_on and not self.listeners and not self._joining:
                 # Nobody listens: wait, the position stays where it is. What was encoded
                 # before is stale for the next listener.
                 self._wake.clear()
-                self._burst.clear()
-                self._burst_bytes = 0
+                self._recent.clear()
+                for encoder in self._encoders.values():
+                    encoder.forget()
                 await self._wake.wait()
                 deadline = time.monotonic()
-            encoder.write(await self._next_frame())
-            await encoder.drain()
+            frame = await self._next_frame()
+            self._recent.append(frame)
+            encoders = list(self._encoders.values())
+            for encoder in encoders:
+                encoder.write(frame)
+            for encoder in encoders:
+                await encoder.drain()
             self._stream_time += FRAME_SECONDS
             deadline += FRAME_SECONDS
             delay = deadline - time.monotonic()

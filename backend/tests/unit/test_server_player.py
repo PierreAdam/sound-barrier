@@ -5,6 +5,7 @@ import asyncio
 import subprocess
 import time
 import uuid
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
@@ -170,6 +171,41 @@ async def test_without_listeners_it_waits_unless_always_on(tmp_path: Path) -> No
         await always.close()
 
 
+async def _first_chunk(stream: AsyncIterator[bytes]) -> bytes:
+    """The burst a new listener gets at once."""
+    return await asyncio.wait_for(anext(stream), timeout=3)
+
+
+async def test_bursts_and_bit_rates_as_listeners_ask(tmp_path: Path) -> None:
+    library = Library(tmp_path)
+    track = library.tone("one.mp3", 30)
+    player = await _player(library, always_on=True)
+    try:
+        await player.command({"name": "playQueue", "tracks": [track]})
+        await asyncio.sleep(3.5)  # 3.5 s encoded, kept for the bursts
+        second = BIT_RATE * 1000 / 8
+        default, big = player.listen(), player.listen(burst_seconds=3)
+        assert 1.8 * second < len(await _first_chunk(default)) < 2.5 * second
+        assert 2.8 * second < len(await _first_chunk(big)) < 3.5 * second
+        assert player.state()["listeners"] == 2
+
+        # Another bit rate: its own encoder, its burst encoded from the recent sound.
+        low = player.listen(burst_seconds=3, bit_rate=128)
+        burst = await _first_chunk(low)
+        assert 2.8 * 16000 < len(burst) < 3.6 * 16000
+        assert player.listeners == 3
+        await low.aclose()  # its last listener: that encoder stops
+        assert player.listeners == 2
+        assert sorted(player._encoders) == [BIT_RATE]  # pyright: ignore[reportPrivateUsage]
+        await default.aclose()
+        await big.aclose()
+        assert player.state()["listeners"] == 0
+        with pytest.raises(ValueError):
+            await anext(player.listen(bit_rate=100))
+    finally:
+        await player.close()
+
+
 async def test_driven_through_the_remote_control_hub(tmp_path: Path) -> None:
     assert FFMPEG is not None
     library = Library(tmp_path)
@@ -238,3 +274,20 @@ async def test_the_timeline_tells_a_late_listener_what_it_hears(tmp_path: Path) 
     assert first["at"] < second["at"] <= now["streamTime"]
     assert 0.5 < second["at"] < 1.2
     assert (second["position"], second["playing"], second["rate"]) == (0, True, 1)
+
+
+async def test_the_stream_title_internet_radio_clients_show(tmp_path: Path) -> None:
+    library = Library(tmp_path)
+    chapters = [{"start": 0, "title": "One"}, {"start": 2, "title": "Two"}]
+    song = library.tone("song.mp3", 5, artist="Band")
+    book = library.tone("book.mp3", 6, longForm=True, chapters=chapters)
+    player = await _player(library)
+    try:
+        assert player.stream_title() == ""  # nothing queued
+        await player.command({"name": "playQueue", "tracks": [song, book]})
+        assert player.stream_title() == "Band - song"
+        await player.command({"name": "next"})
+        await player.command({"name": "seek", "position": 2.5})
+        assert player.stream_title() == "book · Two"  # no artist: the title alone
+    finally:
+        await player.close()

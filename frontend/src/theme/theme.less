@@ -3973,6 +3973,11 @@ select.field__input {
     color: @color-warning;
   }
 
+  // "Playing on Server player · 2 listeners": the devices playing its stream.
+  &__listeners {
+    color: @color-text-muted;
+  }
+
   // Remote mode: the bar drives another player; a dull accent tells it at a glance.
   &--remote {
     border-top-color: color-mix(in srgb, @color-accent 45%, @color-border);
@@ -5087,6 +5092,47 @@ select.field__input {
   &__actions {
     display: flex;
     justify-content: flex-end;
+  }
+}
+
+// The server player's stream URL and its options (StreamUrlDialog.tsx) -------------------
+
+.stream-url-dialog {
+  &:extend(.install-dialog all);
+  width: min(480px, calc(100vw - 2 * @space-4));
+
+  > .field,
+  > .checkbox {
+    margin-top: @space-4;
+  }
+
+  &__title {
+    margin: 0 0 @space-2;
+    font-size: @font-size-lg;
+  }
+
+  &__note {
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+  }
+
+  &__url {
+    display: flex;
+    gap: @space-2;
+    margin-top: @space-4;
+
+    .field__input {
+      min-width: 0;
+      font-family: ui-monospace, monospace;
+      font-size: @font-size-sm;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: @space-4;
   }
 }
 

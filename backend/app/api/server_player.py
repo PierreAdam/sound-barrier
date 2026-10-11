@@ -21,7 +21,19 @@ from app.api.deps import ApiModel, CurrentCaller, DbSession
 from app.api.lyrics import LyricsOut, lyrics_out
 from app.core.config import Settings
 from app.services import lyrics, media, server_settings
-from app.services.server_player import ServerPlayer, ServerPlayers, ffmpeg_path, library_files
+from app.services.server_player import (
+    BIT_RATE,
+    BIT_RATES,
+    BURST_SECONDS,
+    DEVICE,
+    ICY_METAINT,
+    MAX_BURST_SECONDS,
+    ServerPlayer,
+    ServerPlayers,
+    ffmpeg_path,
+    library_files,
+    with_icy,
+)
 
 # Readable by the receiver's page, wherever it is hosted: the key is the permission.
 _CORS = {"Access-Control-Allow-Origin": "*"}
@@ -160,21 +172,40 @@ async def stream_lyrics(
 
 
 @router.get("/stream/{key}")
-async def stream(key: str, request: Request, listener: str | None = _LISTENER) -> StreamingResponse:
+async def stream(
+    key: str,
+    request: Request,
+    listener: str | None = _LISTENER,
+    # Options of the stream's URL (the web UI's "Stream URL" builder):
+    bitrate: int = Query(default=BIT_RATE),  # kbps, one of BIT_RATES
+    burst: float = Query(default=BURST_SECONDS, ge=0, le=MAX_BURST_SECONDS),  # seconds
+    titles: bool = Query(default=True),  # the title playing, to clients asking for it
+) -> StreamingResponse:
     player = _by_key(request, key)
+    if bitrate not in BIT_RATES:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"bitrate: one of {', '.join(map(str, BIT_RATES))}",
+            headers=_CORS,
+        )
 
     async def body() -> AsyncIterator[bytes]:
-        async for chunk in player.listen(listener):
+        async for chunk in player.listen(listener, burst, bitrate):
             if await request.is_disconnected():
                 return
             yield chunk
 
-    return StreamingResponse(
-        body(),
-        media_type="audio/mpeg",
-        headers={
-            "Cache-Control": "no-cache, no-store",
-            # Receivers (Chromecast) are pages of another origin; the key is the permission.
-            "Access-Control-Allow-Origin": "*",
-        },
-    )
+    headers = {
+        "Cache-Control": "no-cache, no-store",
+        # Receivers (Chromecast) are pages of another origin; the key is the permission.
+        "Access-Control-Allow-Origin": "*",
+        # What internet radio clients (Winamp, VLC...) show of the station.
+        "icy-name": DEVICE,
+        "icy-br": str(bitrate),
+        "icy-pub": "0",
+    }
+    chunks = body()
+    if titles and request.headers.get("icy-metadata") == "1":  # they show the title, too
+        headers["icy-metaint"] = str(ICY_METAINT)
+        chunks = with_icy(chunks, player.stream_title)
+    return StreamingResponse(chunks, media_type="audio/mpeg", headers=headers)

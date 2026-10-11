@@ -53,6 +53,10 @@ async def test_start_configure_and_stop(app: FastAPI, user: SubsonicUser) -> Non
         lyrics = await web.get(f"/api/stream/{key}/lyrics", params={"song": not_queued})
         assert lyrics.status_code == 404
 
+        # The stream URL's options: a bit rate it offers, a burst of 10 s at most.
+        for options in ({"bitrate": 100}, {"burst": 11}, {"titles": "maybe"}):
+            assert (await web.get(f"/api/stream/{key}", params=options)).status_code == 422
+
         assert (await web.get("/api/stream/not-a-key")).status_code == 404
         assert (await web.delete("/api/server-player")).status_code == 204
         assert (await web.get("/api/server-player")).json() is None

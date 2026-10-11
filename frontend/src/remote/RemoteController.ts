@@ -266,7 +266,7 @@ export class RemoteController implements PlayerController {
   private buildSnapshot(): PlayerSnapshot {
     const state = this.state;
     if (!state) return EMPTY_SNAPSHOT;
-    const { rate: _rate, queueRevision: _revision, currentKey, ...rest } = state;
+    const { rate: _rate, queueRevision: _revision, currentKey, listeners: _listeners, ...rest } = state;
     const queue = this.queue;
     // The current entry in this copy of the queue (it may have moved here already).
     const index = queue ? (currentKey === null ? -1 : queue.keys.indexOf(currentKey)) : state.index;
