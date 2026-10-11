@@ -7,6 +7,8 @@ from fastapi.responses import FileResponse
 
 # Paths owned by the APIs: an unknown one is a 404, never the web page.
 _API_PREFIXES = ("rest/", "api/")
+# Pages of their own: /radio/<key> is radio.html (a server player's "now playing").
+_PAGES = {"radio/": "radio.html"}
 
 
 def mount_web(app: FastAPI, web_dir: Path) -> None:
@@ -26,5 +28,11 @@ def mount_web(app: FastAPI, web_dir: Path) -> None:
             # Vite puts a content hash in asset names: they never change.
             cache = "public, max-age=31536000, immutable" if path.startswith("assets/") else None
             return FileResponse(file, headers={"Cache-Control": cache} if cache else None)
-        # index.html must always be revalidated, it names the current assets.
-        return FileResponse(index, headers={"Cache-Control": "no-cache"})
+        page = next(
+            (root / name for prefix, name in _PAGES.items() if path.startswith(prefix)), None
+        )
+        # The HTML pages must always be revalidated: they name the current assets.
+        return FileResponse(
+            page if page is not None and page.is_file() else index,
+            headers={"Cache-Control": "no-cache"},
+        )

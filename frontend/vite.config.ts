@@ -49,10 +49,12 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      // The web UI, and the TV page of "Cast this player" (src/cast/tv).
+      // The web UI, the TV page of "Cast this player" (src/cast/tv), and a server player's
+      // "now playing" page (src/radio, served at /radio/<key>).
       input: {
         main: fileURLToPath(new URL("./index.html", import.meta.url)),
         tv: fileURLToPath(new URL("./tv.html", import.meta.url)),
+        radio: fileURLToPath(new URL("./radio.html", import.meta.url)),
       },
     },
   },

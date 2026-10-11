@@ -285,6 +285,14 @@ export const CopyIcon = () => (
   </Icon>
 );
 
+/** A box with an arrow out of it: opens in a new tab. */
+export const ExternalIcon = () => (
+  <Icon>
+    <path {...stroke} d="M14 4h6v6M20 4l-9 9" />
+    <path {...stroke} d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />
+  </Icon>
+);
+
 /** A square: stop (the server player). */
 export const StopIcon = () => (
   <Icon>

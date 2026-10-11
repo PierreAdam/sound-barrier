@@ -18,7 +18,7 @@ import { InfoTip } from "../components/InfoTip";
 import { MenuSection } from "../components/PlaybackMenu";
 import type { LinkTarget } from "./link";
 import { controlTarget, getPlayerMode, playHere } from "./mode";
-import { StreamUrlDialog } from "./StreamUrlDialog";
+import { showStreamUrlDialog } from "./StreamUrlDialog";
 import { disableRemoteTarget, getRemoteTarget } from "./target";
 
 /** Its name, as the backend registers it (services/server_player.py). */
@@ -49,7 +49,6 @@ export function ServerPlayerSection({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [castChoices, setCastChoices] = useState(false); // "▾": the other ways to cast
-  const [urlDialog, setUrlDialog] = useState(false); // the stream's URL, with its options
 
   useEffect(() => {
     let cancelled = false;
@@ -225,7 +224,10 @@ export function ServerPlayerSection({
               aria-label="Stream URL"
               title="The stream's URL, with its options (for VLC, an internet radio app...)"
               disabled={busy}
-              onClick={() => setUrlDialog(true)}
+              onClick={() => {
+                showStreamUrlDialog(player.streamUrl);
+                close();
+              }}
             >
               <CopyIcon />
             </button>
@@ -240,7 +242,6 @@ export function ServerPlayerSection({
               <StopIcon />
             </button>
           </div>
-          {urlDialog && <StreamUrlDialog streamUrl={player.streamUrl} onClose={() => setUrlDialog(false)} />}
           {castChoices && ways.length > 1 && (
             <div className="remote-menu__cast-choices" role="group" aria-label="Cast">
               {ways.map((way) => (

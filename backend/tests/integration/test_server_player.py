@@ -53,6 +53,16 @@ async def test_start_configure_and_stop(app: FastAPI, user: SubsonicUser) -> Non
         lyrics = await web.get(f"/api/stream/{key}/lyrics", params={"song": not_queued})
         assert lyrics.status_code == 404
 
+        # A "now playing" display: what plays and comes next, in JSON or plain text.
+        info = await web.get(f"/api/stream/{key}/info", params={"next": 2, "delay": 10})
+        assert info.status_code == 200
+        assert info.headers["access-control-allow-origin"] == "*"
+        assert info.json()["track"] is None and info.json()["upcoming"] == []
+        text = await web.get(f"/api/stream/{key}/info", params={"format": "text"})
+        assert text.text == "Now: nothing\nListeners: 0\n"
+        for options in ({"next": 21}, {"delay": 61}, {"format": "xml"}):
+            assert (await web.get(f"/api/stream/{key}/info", params=options)).status_code == 422
+
         # The stream URL's options: a bit rate it offers, a burst of 10 s at most.
         for options in ({"bitrate": 100}, {"burst": 11}, {"titles": "maybe"}):
             assert (await web.get(f"/api/stream/{key}", params=options)).status_code == 422

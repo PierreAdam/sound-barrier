@@ -12,10 +12,10 @@ import hashlib
 import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 
 from app.api.deps import ApiModel, CurrentCaller, DbSession
 from app.api.lyrics import LyricsOut, lyrics_out
@@ -28,10 +28,13 @@ from app.services.server_player import (
     DEVICE,
     ICY_METAINT,
     MAX_BURST_SECONDS,
+    MAX_ON_AIR_DELAY_SECONDS,
+    MAX_UPCOMING,
     ServerPlayer,
     ServerPlayers,
     ffmpeg_path,
     library_files,
+    on_air_text,
     with_icy,
 )
 
@@ -126,6 +129,23 @@ async def stream_now(
 ) -> dict[str, Any]:
     response.headers.update({**_CORS, "Cache-Control": "no-store"})
     return _by_key(request, key).now(listener)
+
+
+@router.get("/stream/{key}/info", response_model=None)
+async def stream_info(
+    key: str,
+    request: Request,
+    upcoming: int = Query(default=3, ge=0, le=MAX_UPCOMING, alias="next"),
+    delay: float = Query(default=0, ge=0, le=MAX_ON_AIR_DELAY_SECONDS),
+    as_: Literal["json", "text"] = Query(default="json", alias="format"),
+) -> Response:
+    """What plays and what comes next, for a "now playing" display (the radio page,
+    a website, a script): by the key only, like the stream."""
+    on_air = _by_key(request, key).on_air(upcoming, delay)
+    headers = {**_CORS, "Cache-Control": "no-store"}
+    if as_ == "text":
+        return PlainTextResponse(on_air_text(on_air), headers=headers)
+    return JSONResponse(on_air, headers=headers)
 
 
 @router.get("/stream/{key}/cover")

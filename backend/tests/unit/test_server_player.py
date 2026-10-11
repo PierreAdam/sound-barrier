@@ -12,7 +12,13 @@ from typing import Any
 import pytest
 
 from app.services.remote import RemoteHub
-from app.services.server_player import BIT_RATE, ServerPlayer, ServerPlayers, ffmpeg_path
+from app.services.server_player import (
+    BIT_RATE,
+    ServerPlayer,
+    ServerPlayers,
+    ffmpeg_path,
+    on_air_text,
+)
 from tests.unit.test_remote import Inbox
 
 FFMPEG = ffmpeg_path()
@@ -289,5 +295,43 @@ async def test_the_stream_title_internet_radio_clients_show(tmp_path: Path) -> N
         await player.command({"name": "next"})
         await player.command({"name": "seek", "position": 2.5})
         assert player.stream_title() == "book · Two"  # no artist: the title alone
+    finally:
+        await player.close()
+
+
+async def test_on_air_what_plays_and_comes_next_as_heard_late(tmp_path: Path) -> None:
+    library = Library(tmp_path)
+    tracks = [
+        library.tone(f"{name}.mp3", 5, artist="Band", year=2012, coverArt=f"al-{name}")
+        for name in ("one", "two", "three")
+    ]
+    player = await _player(library, always_on=True)
+    try:
+        assert player.on_air()["track"] is None
+        await player.command({"name": "playQueue", "tracks": tracks})
+        await asyncio.sleep(0.6)
+        on_air = player.on_air(upcoming=1)
+        assert on_air["track"] == {
+            "title": "one",
+            "artist": "Band",
+            "album": None,
+            "year": 2012,
+            "coverArt": "al-one",
+            "duration": 5.0,
+        }
+        assert on_air["playing"] is True
+        assert 0.3 < on_air["position"] < 1.0
+        assert [t["title"] for t in on_air["upcoming"]] == ["two"]
+        await player.command({"name": "next"})
+        # Heard a second late: still the first track, the second one next.
+        late = player.on_air(upcoming=2, delay=1.0)
+        assert late["track"]["title"] == "one"
+        assert [t["title"] for t in late["upcoming"]] == ["two", "three"]
+        assert player.on_air()["track"]["title"] == "two"
+        assert on_air_text(player.on_air(upcoming=1)) == (
+            "Now: Band - two\nNext: Band - three\nListeners: 0\n"
+        )
+        await player.command({"name": "repeat"})  # all: around again
+        assert [t["title"] for t in player.on_air(upcoming=5)["upcoming"]] == ["three", "one"]
     finally:
         await player.close()

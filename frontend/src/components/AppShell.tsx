@@ -7,6 +7,7 @@ import { useAuth } from "../auth/AuthContext";
 import { PlayerProvider } from "../player/PlayerContext";
 import { PreferencesProvider } from "../preferences/PreferencesContext";
 import { RemoteTargetBridge } from "../remote/RemoteTargetBridge";
+import { StreamUrlDialogHost } from "../remote/StreamUrlDialog";
 import { DisplayDiagnostics } from "./DisplayDiagnostics";
 import { NowPlaying, NowPlayingProvider } from "./NowPlaying";
 import { PlayerDiagnostics } from "./PlayerDiagnostics";
@@ -44,6 +45,7 @@ export function AppShell() {
               <NowPlaying />
               <PlayerDock panelOpen={panelOpen} onQueueOpen={() => setPanelOpen(false)} />
             </div>
+            <StreamUrlDialogHost />
             <DisplayDiagnostics />
             <PlayerDiagnostics />
           </NowPlayingProvider>

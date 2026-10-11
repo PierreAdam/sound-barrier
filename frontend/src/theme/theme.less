@@ -5106,15 +5106,48 @@ select.field__input {
     margin-top: @space-4;
   }
 
+  &__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: @space-3;
+  }
+
   &__title {
-    margin: 0 0 @space-2;
+    margin: 0;
     font-size: @font-size-lg;
+  }
+
+  // "Audio stream" | "Now playing page": one panel at a time.
+  &__tabs {
+    margin: @space-2 0 @space-3;
+  }
+
+  &__choices {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: @space-3;
+    margin-top: @space-3;
   }
 
   &__note {
     color: @color-text-muted;
     font-size: @font-size-xs;
   }
+
+  &__hint {
+    display: block;
+    margin-top: @space-3;
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+  }
+
+  // Its top stays put (not centered): switching panels does not move the tabs.
+  margin-top: min(10vh, 80px);
+  // Taller than the window (a phone): it scrolls inside.
+  max-height: calc(100vh - min(10vh, 80px) - @space-4);
+  overflow-y: auto;
+  box-sizing: border-box;
 
   &__url {
     display: flex;
@@ -5133,6 +5166,303 @@ select.field__input {
     align-items: center;
     justify-content: space-between;
     margin-top: @space-4;
+  }
+}
+
+// A server player's "now playing" page (radio.html, src/radio) ----------------------------
+// Fills its window (a screen, a web page's frame): a card, or a one-line banner.
+
+.radio-page {
+  display: grid;
+  min-height: 100vh;
+  margin: 0;
+  padding: @space-4;
+  place-items: center;
+  box-sizing: border-box;
+  background: @color-bg;
+
+  &--banner {
+    padding: @space-2;
+  }
+
+  // A card of a given shape: as large as the window allows (or the size it was given).
+  &--shaped {
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+.radio {
+  display: grid;
+  gap: @space-3;
+  width: min(560px, 100%);
+  padding: @space-5;
+  box-sizing: border-box;
+  border: 1px solid @color-border;
+  border-radius: @radius-md;
+  background: @color-surface;
+  color: @color-text;
+
+  &__head {
+    display: flex;
+    justify-content: space-between;
+    gap: @space-3;
+    color: @color-text-muted;
+    font-size: @font-size-sm;
+  }
+
+  &__dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: @space-2;
+    border-radius: 50%;
+    background: @color-error;
+    vertical-align: 1px;
+  }
+
+  &--paused &__dot {
+    background: @color-text-muted;
+  }
+
+  &__now {
+    display: flex;
+    align-items: center;
+    gap: @space-4;
+  }
+
+  &__cover {
+    flex: none;
+    width: 128px;
+    height: 128px;
+    border-radius: @radius-sm;
+    object-fit: cover;
+    background: @color-surface-raised;
+  }
+
+  &__meta {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__label {
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+  }
+
+  &__title {
+    overflow: hidden;
+    font-size: @font-size-xl;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__artist {
+    overflow: hidden;
+    color: @color-text-muted;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__bar {
+    height: 4px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: @color-surface-raised;
+
+    // Moved by a transform (main.ts `follow`): the compositor draws it, nothing is laid
+    // out again (light on a slow computer, a screen's software renderer).
+    span {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: @color-accent;
+      transform: scaleX(0);
+      transform-origin: left;
+      will-change: transform;
+    }
+  }
+
+  &__times {
+    display: flex;
+    justify-content: space-between;
+    margin-top: @space-1;
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__upcoming {
+    display: grid;
+    margin: @space-1 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__song {
+    display: flex;
+    align-items: center;
+    gap: @space-3;
+    padding: @space-2 0;
+    border-top: 1px solid @color-border;
+    font-size: @font-size-sm;
+  }
+
+  &__song-cover {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    object-fit: cover;
+    background: @color-surface-raised;
+  }
+
+  &__song-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__song-artist,
+  &__song-length {
+    color: @color-text-muted;
+  }
+
+  &__song-length {
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__idle {
+    color: @color-text-muted;
+    font-size: @font-size-lg;
+    text-align: center;
+  }
+
+  // A given shape (main.ts sets its size): up next takes the room left, what does not fit
+  // is cut.
+  &--shaped {
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    max-width: none;
+    overflow: hidden;
+  }
+
+  &--shaped &__next {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  // Portrait: a larger cover, above the song.
+  &--tall &__now {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  &--tall &__cover {
+    width: 220px;
+    height: 220px;
+  }
+
+  // 16:9: the song on the left, up next on the right.
+  &--wide {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    column-gap: @space-5;
+  }
+
+  &--wide &__head {
+    grid-column: 1 / -1;
+  }
+
+  &--wide &__now {
+    flex-direction: column;
+    align-items: flex-start;
+    align-self: start;
+  }
+
+  &--wide &__cover {
+    width: 200px;
+    height: 200px;
+  }
+
+  &--wide &__progress {
+    grid-column: 1;
+  }
+
+  &--wide &__next {
+    grid-column: 2;
+    grid-row: 2 / span 2;
+  }
+
+  // One line: the cover, the song, its progress, the next one.
+  &--banner {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0 @space-3;
+    width: 100%;
+    padding: @space-2 @space-3;
+  }
+
+  &--banner &__head,
+  &--banner &__label,
+  &--banner &__times,
+  &--banner &__song-cover,
+  &--banner &__song-length,
+  &--banner &__song:not(:first-child) {
+    display: none;
+  }
+
+  &--banner &__now {
+    display: contents;
+  }
+
+  &--banner &__cover {
+    grid-row: span 3;
+    width: 56px;
+    height: 56px;
+  }
+
+  &--banner &__meta {
+    grid-auto-flow: column;
+    justify-content: start;
+    gap: @space-2;
+  }
+
+  &--banner &__title {
+    font-size: @font-size-base;
+  }
+
+  &--banner &__progress {
+    grid-column: 2;
+    margin: @space-1 0;
+  }
+
+  &--banner &__next {
+    grid-column: 2;
+  }
+
+  &--banner &__song {
+    gap: @space-1;
+    padding: 0;
+    border: 0;
+    color: @color-text-muted;
+    font-size: @font-size-xs;
+
+    &::before {
+      content: "Next:";
+    }
+  }
+
+  &--banner&--no-cover {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  &--banner&--no-cover &__meta,
+  &--banner&--no-cover &__progress,
+  &--banner&--no-cover &__next {
+    grid-column: 1;
   }
 }
 

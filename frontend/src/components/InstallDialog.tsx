@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import type { InstallMethod } from "../pwa/install";
+import { closeOnBackdropClick } from "./dialog";
 import { IosShareIcon } from "./Icons";
 
 /** How to add the web UI to the home screen, when the browser has no prompt for it. */
@@ -17,8 +18,8 @@ export function InstallDialog({ method, onClose }: { method: Exclude<InstallMeth
       className="install-dialog"
       aria-labelledby="install-dialog-title"
       onClose={onClose}
-      // A tap outside the box (on the backdrop) closes it.
-      onClick={(event) => event.target === dialog.current && dialog.current.close()}
+      // A click outside the box (on the backdrop) closes it.
+      onClick={closeOnBackdropClick}
     >
       <h2 id="install-dialog-title" className="install-dialog__title">
         Install as app

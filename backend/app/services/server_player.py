@@ -80,6 +80,8 @@ RESTART_THRESHOLD_SECONDS = 3.0  # "previous" restarts the track after this
 HEARTBEAT_SECONDS = 10.0  # the state is reported this often while playing (remotes' clocks)
 TIMELINE_LENGTH = 16  # changes kept for the Cast receiver (what its device plays, late)
 MAX_NAMED_LISTENERS = 32  # their start is kept (the Cast receiver's: see `now`)
+MAX_ON_AIR_DELAY_SECONDS = 60.0  # a "now playing" display following the listeners, late
+MAX_UPCOMING = 20  # tracks it may show after the current one
 SPEEDS = (1.0, 1.25, 1.5, 1.75, 2.0)  # of audiobooks and podcasts, as in the web UI
 NAME = "Server player"
 DEVICE = "Sound-Barrier"
@@ -304,6 +306,34 @@ def _end(queue: asyncio.Queue[bytes | None]) -> None:
     while not queue.empty():
         queue.get_nowait()
     queue.put_nowait(None)
+
+
+def _on_air_track(track: dict[str, Any]) -> dict[str, Any]:
+    """What a "now playing" display shows of a track."""
+    return {
+        "title": track["title"],
+        "artist": track.get("artist"),
+        "album": track.get("album"),
+        "year": int(track["year"]) if track.get("year") else None,
+        "coverArt": track.get("coverArt"),
+        "duration": float(track.get("durationSeconds") or 0),
+    }
+
+
+def on_air_text(on_air: dict[str, Any]) -> str:
+    """`on_air` as a few lines of plain text, for scripts and simple displays."""
+
+    def name(track: dict[str, Any]) -> str:
+        return " - ".join(t for t in (track.get("artist"), track["title"]) if t)
+
+    track = on_air["track"]
+    if track is None:
+        lines = ["Now: nothing"]
+    else:
+        lines = [f"Now: {name(track)}{'' if on_air['playing'] else ' (paused)'}"]
+    lines += [f"Next: {name(t)}" for t in on_air["upcoming"]]
+    lines.append(f"Listeners: {on_air['listeners']}")
+    return "\n".join(lines) + "\n"
 
 
 def _finite(value: object) -> float | None:
@@ -590,6 +620,50 @@ class ServerPlayer:
             "listenerStart": None if start is None else round(start, 3),
             "timeline": list(self._timeline),
         }
+
+    def on_air(self, upcoming: int = 3, delay: float = 0.0) -> dict[str, Any]:
+        """What plays, for a "now playing" display: the track, where it is, the next
+        `upcoming` tracks. `delay`: as heard that many seconds late (the listeners' buffer),
+        from the timeline."""
+        heard = self._stream_time - min(max(delay, 0.0), MAX_ON_AIR_DELAY_SECONDS)
+        marks = list(self._timeline)
+        mark = next((m for m in reversed(marks) if m["at"] <= heard), marks[0] if marks else None)
+        track = mark["track"] if mark else None
+        duration = float(track.get("durationSeconds") or 0) if track else 0.0
+        # Nobody listening (and not always on): the stream waits, the song too.
+        playing = bool(mark and mark["playing"]) and (self.always_on or self.listeners > 0)
+        position = 0.0
+        if mark is not None:
+            position = mark["position"]
+            if mark["playing"]:
+                position += max(heard - mark["at"], 0.0) * mark["rate"]
+            if duration > 0:
+                position = min(position, duration)
+        chapters: list[dict[str, Any]] = track.get("chapters", []) if track else []
+        chapter = chapter_index(chapters, position)
+        return {
+            "station": DEVICE,
+            "playing": playing,
+            "track": _on_air_track(track) if track else None,
+            "position": round(position, 3),
+            "duration": duration,
+            "chapter": chapters[chapter]["title"] if chapter >= 0 else None,
+            "upcoming": [_on_air_track(t) for t in self._following(mark, upcoming)],
+            "listeners": self.listeners,
+        }
+
+    def _following(self, mark: dict[str, Any] | None, count: int) -> list[dict[str, Any]]:
+        """The `count` tracks after `mark`'s entry (the current one if it is no longer
+        queued), in play order: around again with "repeat all"."""
+        order = self.queue.order
+        if count <= 0 or not order:
+            return []
+        key = mark["key"] if mark else None
+        index = next((i for i, e in enumerate(order) if e.key == key), self.queue.index)
+        following = order[index + 1 :]
+        if self.queue.repeat_mode == "all":
+            following += order[: max(index, 0)]
+        return [entry.track for entry in following[:count]]
 
     def stream_title(self) -> str:
         """What plays, as internet radio clients show it: "Artist - Title", and the chapter

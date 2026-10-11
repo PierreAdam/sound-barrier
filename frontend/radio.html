@@ -1,0 +1,41 @@
+<!doctype html>
+<!--
+  A server player's "now playing", for a screen or a web page (src/radio): what plays, how
+  far it is, what comes next. At /radio/<stream key>, its options in the URL (the Stream
+  URL dialog builds it). It only reads /api/stream/<key>/info: no sign-in, no sound.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Sound-Barrier · Now playing</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body class="radio-page">
+    <main class="radio" id="radio" hidden>
+      <header class="radio__head">
+        <span class="radio__live"><span class="radio__dot" aria-hidden="true"></span><span id="state">Live</span> · <span id="station"></span></span>
+        <span class="radio__listeners" id="listeners"></span>
+      </header>
+      <div class="radio__now">
+        <img class="radio__cover" id="cover" alt="" />
+        <div class="radio__meta">
+          <span class="radio__label">Now playing</span>
+          <span class="radio__title" id="title"></span>
+          <span class="radio__artist" id="artist"></span>
+        </div>
+      </div>
+      <div class="radio__progress">
+        <div class="radio__bar"><span id="bar"></span></div>
+        <div class="radio__times"><span id="elapsed">0:00</span><span id="duration">0:00</span></div>
+      </div>
+      <section class="radio__next" id="next" aria-label="Up next">
+        <span class="radio__label">Up next</span>
+        <ol class="radio__upcoming" id="upcoming"></ol>
+      </section>
+    </main>
+    <p class="radio__idle" id="idle">Sound-Barrier</p>
+    <script type="module" src="/src/radio/main.ts"></script>
+  </body>
+</html>

@@ -9,6 +9,7 @@ from app.web import mount_web
 def _client(tmp_path: Path) -> AsyncClient:
     (tmp_path / "assets").mkdir()
     (tmp_path / "index.html").write_text("<html>index</html>")
+    (tmp_path / "radio.html").write_text("<html>radio</html>")
     (tmp_path / "assets" / "app-1234.js").write_text("js")
     (tmp_path / "favicon.ico").write_bytes(b"ico")
     (tmp_path.parent / "secret.txt").write_text("secret")
@@ -33,6 +34,8 @@ async def test_serves_files_and_spa_routes(tmp_path: Path) -> None:
         assert response.text == "<html>index</html>", path
         assert response.headers["cache-control"] == "no-cache"
     assert (await client.head("/")).status_code == 200
+    radio = await client.get("/radio/a-stream-key")  # a page of its own
+    assert (radio.text, radio.headers["cache-control"]) == ("<html>radio</html>", "no-cache")
 
 
 async def test_apis_are_not_shadowed(tmp_path: Path) -> None:
